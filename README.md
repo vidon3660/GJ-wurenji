@@ -29,9 +29,9 @@ http://localhost:3000
 
 | 角色 | 账号 | 密码 |
 |---|---|---|
-| 教师 | `teacher@demo.local` | `teacher123` |
-| 学生 | `student@demo.local` | `student123` |
-| 学生 2 | `student2@demo.local` | `student123` |
+| 教师 | `teacher@demo.local` | 本地 seed 配置 |
+| 学生 | `student@demo.local` | 本地 seed 配置 |
+| 学生 2 | `student2@demo.local` | 本地 seed 配置 |
 
 PostGIS 默认映射到宿主机 `55432`，避免与本机已有的 PostgreSQL `5432` 冲突。可通过 `POSTGRES_PORT` 修改。
 
