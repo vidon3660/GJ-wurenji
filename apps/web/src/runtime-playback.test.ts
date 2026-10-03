@@ -150,6 +150,37 @@ describe("runtime playback", () => {
     expect(state.orders[0]?.status).toBe("DELIVERING")
     expect(state.summary.airborneAircraft).toBe(1)
   })
+
+  it("keeps the authoritative alternate route while reconstructing a replay frame", () => {
+    const state = projectLogisticsRuntimePlayback({
+      simulationTimeMs: 220_000,
+      routes: [...routes(), {
+        id: "alternate-out",
+        name: "备选去程",
+        destinationNodeId: "D1",
+        direction: "OUTBOUND",
+        role: "ALTERNATE",
+        sourceVersionId: "version-out",
+        sourceVersionNo: 1,
+        validationStatus: "PASSED",
+        status: "AVAILABLE",
+        activeTaskCount: 1,
+        affectedEventIds: [],
+        waypoints: [
+          { id: "alternate-1", name: "备选 1", position: { longitude: 114, latitude: 22 }, altitudeMeters: 50, segmentAltitudeMeters: 50, speedMps: 10, nodeId: null, locked: false },
+          { id: "alternate-2", name: "备选 2", position: { longitude: 114.02, latitude: 22 }, altitudeMeters: 50, segmentAltitudeMeters: 50, speedMps: 10, nodeId: null, locked: false }
+        ]
+      }],
+      tasks: [{ ...task(), activeRouteId: "alternate-out" }],
+      aircraft: [aircraft()],
+      orders: [order()],
+      summary: summary()
+    }, 50_000, false)
+
+    expect(state.tasks[0]).toMatchObject({ status: "OUTBOUND", activeRouteId: "alternate-out" })
+    expect(state.tasks[0]?.position.longitude).toBeCloseTo(114.01, 3)
+    expect(state.aircraft[0]?.position.longitude).toBeCloseTo(114.01, 3)
+  })
 })
 
 function routes(): LogisticsRuntimeRouteView[] {
