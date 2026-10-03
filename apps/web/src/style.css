@@ -10116,3 +10116,213 @@ select:focus-visible,
   .resource-detail-section { padding-inline: 12px; }
   .login-form { padding-inline: 14px; }
 }
+
+/* Shared narrow-screen guardrails.  Keep controls usable before individual
+ * workspaces take over: flexible grid children may shrink, toolbars wrap,
+ * and data tables scroll inside their panel instead of widening the page. */
+.platform-content,
+.platform-content > *,
+.education-page > *,
+.content-section,
+.home-grid,
+.assignment-todo-item,
+.student-scene-page-heading,
+.page-heading {
+  min-width: 0;
+}
+
+.platform-content {
+  overscroll-behavior: contain;
+}
+
+.el-table {
+  max-width: 100%;
+}
+
+.el-table__body-wrapper,
+.el-table__header-wrapper {
+  max-width: 100%;
+}
+
+.el-dialog__body {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .platform-user-copy,
+  .platform-context {
+    display: none;
+  }
+
+  .platform-user {
+    min-width: 38px;
+    border-left: 0;
+    padding-left: 4px;
+  }
+
+  .platform-actions {
+    gap: 2px;
+  }
+
+  .page-heading,
+  .content-section > header,
+  .assignment-library-heading,
+  .student-scene-page-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .heading-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .heading-actions .el-button {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assignment-todo-item {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .assignment-todo-item > .assignment-more {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .assignment-status {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .assignment-todo-summary small {
+    white-space: normal;
+    line-height: 1.4;
+  }
+
+  .student-scene-page-heading > strong {
+    margin-left: auto;
+  }
+
+  .metric-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-band > div,
+  .metric-band > button {
+    min-width: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 13px 14px;
+  }
+
+  .metric-band > div:nth-child(2n),
+  .metric-band > button:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metric-band > div:nth-last-child(-n + 2),
+  .metric-band > button:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .education-page {
+    width: 100%;
+    padding-inline: 12px;
+  }
+
+  .page-heading h1 {
+    font-size: 20px;
+  }
+
+  .metric-band strong,
+  .v3-home-metrics.teacher-metrics strong {
+    font-size: 22px;
+  }
+
+  .teacher-entry-card {
+    grid-template-columns: 30px minmax(0, 1fr) 18px;
+    gap: 10px;
+    min-height: 78px;
+    padding: 13px 14px;
+  }
+
+  .student-scene-page-heading {
+    gap: 8px;
+    padding: 14px;
+  }
+
+  .student-scene-page-heading h2 {
+    font-size: 16px;
+  }
+
+  .student-scene-task-list > button {
+    grid-template-columns: 46px minmax(0, 1fr) 18px;
+    gap: 9px;
+    padding-inline: 11px;
+  }
+
+  .student-scene-task-list > button > .project-state {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .student-scene-task-list > button > .el-icon {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .assignment-filter-toolbar {
+    min-width: 0;
+  }
+
+  .onboarding-layout > section {
+    padding-inline: 15px;
+  }
+
+  .onboarding-layout footer .el-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .onboarding-layout footer .el-button:first-child,
+  .onboarding-layout footer .el-button:nth-child(2) {
+    flex: 1 1 45%;
+  }
+
+  .el-dialog {
+    width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+  }
+
+  .el-dialog__footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .el-dialog__footer .el-button {
+    flex: 1 1 120px;
+    margin-left: 0 !important;
+  }
+
+  .area-map-toolbar,
+  .route-map-toolbar,
+  .v3-map-view-controls {
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .area-map-toolbar::-webkit-scrollbar,
+  .route-map-toolbar::-webkit-scrollbar,
+  .v3-map-view-controls::-webkit-scrollbar {
+    display: none;
+  }
+}
