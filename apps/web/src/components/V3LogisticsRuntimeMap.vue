@@ -55,6 +55,7 @@ import { loadV3MapResources } from "../map-resources-loader"
 import type { RegionTerrainState } from "../terrain"
 import { captureV3Camera, configureRegionMapConstraints, focusV3Coordinates, focusV3Region, regionMaskHierarchy, restoreV3Camera, v3CameraDiagnostics, type V3CameraDiagnostics } from "../map-region-constraints"
 import { renderRegionStaticFeatures } from "../map-static-features"
+import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
 import { resetV3CameraNorth, rotateV3Camera, setV3CameraPreset, zoomV3Camera } from "../map-region-constraints"
 import V3MapViewControls from "./V3MapViewControls.vue"
 import V3MapScaleBar from "./V3MapScaleBar.vue"
@@ -252,13 +253,13 @@ async function loadOfflineLogisticsResources() {
   offlineBuildingsSource = null
   offlineBuildingHeights.clear()
   if (!viewer || viewer.isDestroyed()) return
-  const center = props.region?.center
-  if (!center || center.longitude < 113.10 || center.longitude > 113.50 || center.latitude < 22.95 || center.latitude > 23.20) return
   const { GeoJsonDataSource, HeightReference, JulianDate, Color, ColorMaterialProperty, ConstantProperty } = await import("cesium")
   if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) return
-  const buildingsUrl = ((import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined)
-    ?? props.region?.layers.find((layer) => layer.code === "BUILDINGS")?.dataUrl
-    ?? "/map/logistics/gd-north-core-buildings.geojson").trim()
+  const buildingsUrl = resolveBuildingDataUrl(
+    props.region,
+    (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
+  )
+  if (!buildingsUrl) return
   try {
     const source = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
     if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) {
@@ -268,7 +269,9 @@ async function loadOfflineLogisticsResources() {
     for (const entity of source.entities.values) {
       if (!entity.polygon) continue
       const rawHeight = entity.properties?.height?.getValue(JulianDate.now())
-      const heightMeters = Number.isFinite(Number(rawHeight)) && Number(rawHeight) > 0 ? Number(rawHeight) : 8 + (stableBuildingSeed(entity.id) % 35)
+        ?? entity.properties?.height_m?.getValue(JulianDate.now())
+        ?? entity.properties?.building_levels?.getValue(JulianDate.now())
+      const heightMeters = buildingHeightMeters(rawHeight, String(entity.id))
       offlineBuildingHeights.set(String(entity.id), heightMeters)
       entity.polygon.height = new ConstantProperty(0)
       entity.polygon.heightReference = new ConstantProperty(HeightReference.RELATIVE_TO_GROUND)
@@ -293,12 +296,6 @@ function syncOfflineBuildingMode() {
       entity.polygon.extrudedHeight = new ConstantProperty(props.mode === "3d" ? heightMeters : 0)
     }
   }
-}
-
-function stableBuildingSeed(value: string): number {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619)
-  return Math.abs(hash >>> 0)
 }
 
 watch(() => regionMapResourceKey(props.region), () => {
