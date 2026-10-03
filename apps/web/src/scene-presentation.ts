@@ -28,7 +28,7 @@ export const v3ScenePresentation: Record<SceneType, V3ScenePresentation> = {
     label: "城市低空物流",
     shortLabel: "物流",
     className: "logistics",
-    description: "学习空域分析、航线验证、订单调度与配送应急处置",
+    description: "学习空域分析、航线验证、订单调度、配送运行与应急救援",
     catalogTitle: "物流教学区域"
   },
   VTOL_INSPECTION: {
