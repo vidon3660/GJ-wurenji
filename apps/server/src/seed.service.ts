@@ -74,7 +74,7 @@ export class SeedService implements OnApplicationBootstrap {
     await this.ensureQuestionBank(teacher)
     await this.ensureSceneQuestionBank(teacher, "城市编队表演安全与舞步训练题库", "CITY_SHOW", "覆盖舞步轨迹、编队安全和同步误差证据。", [
       {
-        code: "SHOW-PLAN-01", type: "PLANNING", prompt: "提交表演编队规划时，请填写舞步轨迹、编队安全检查和时刻同步方案。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["trajectoryPlan", "safetyCheck", "timingPlan"] }, stageCode: "SHOW_PROGRAM_PLANNING", sortOrder: 1
+        code: "SHOW-PLAN-01", type: "PLANNING", prompt: "提交表演编队规划时，请填写舞步轨迹、编队安全检查和时刻同步方案。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["trajectoryPlan", "safetyCheck", "timingPlan"] }, stageCode: "SHOW_AREA_PLANNING", sortOrder: 1
       },
       {
         code: "SHOW-DECISION-01", type: "SCENARIO_DECISION", prompt: "表演过程中发现编队间距低于安全阈值时，请填写暂停、分组处置和恢复条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["pauseAction", "groupAction", "resumeCondition"] }, stageCode: "SHOW_RUNTIME", sortOrder: 2
@@ -85,7 +85,7 @@ export class SeedService implements OnApplicationBootstrap {
     ])
     await this.ensureSceneQuestionBank(teacher, "垂起巡检任务规划与应急处置题库", "VTOL_INSPECTION", "覆盖巡检任务点、悬停质量和异常处置证据。", [
       {
-        code: "VTL-PLAN-01", type: "PLANNING", prompt: "提交垂起巡检方案时，请填写任务点顺序、悬停要求和返航条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["taskOrder", "hoverPlan", "returnCondition"] }, stageCode: "VTOL_PLANNING", sortOrder: 1
+        code: "VTL-PLAN-01", type: "PLANNING", prompt: "提交垂起巡检方案时，请填写任务点顺序、悬停要求和返航条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["taskOrder", "hoverPlan", "returnCondition"] }, stageCode: "VTL_AREA_OBJECTS", sortOrder: 1
       },
       {
         code: "VTL-DECISION-01", type: "SCENARIO_DECISION", prompt: "巡检过程中出现通信质量下降时，请填写备降、任务转移和恢复条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["divertAction", "transferAction", "recoveryCondition"] }, stageCode: "VTOL_RUNTIME", sortOrder: 2
@@ -360,8 +360,6 @@ export class SeedService implements OnApplicationBootstrap {
 
   private async ensureQuestionBank(teacher: UserEntity) {
     const title = "城市物流配送综合训练题库"
-    let bank = await this.questionBanks.findOne({ where: { title } })
-    if (bank) return bank
     const questions = normalizeQuestionDefinitions([
       {
         code: "LOGISTICS-SAFETY-01",
@@ -396,7 +394,7 @@ export class SeedService implements OnApplicationBootstrap {
         correctAnswer: null,
         explanation: "时刻表题先检查关键字段，再结合服务端调度指标判定。",
         maxScore: 20,
-        stageCode: "LOGISTICS_SCHEDULE_PLANNING",
+        stageCode: "LOGISTICS_ORDER_SCHEDULING",
         gradingRule: { kind: "REQUIRED_FIELDS", fields: ["assignments", "conflictCheck", "fallback"] },
         sortOrder: 3
       },
@@ -410,32 +408,29 @@ export class SeedService implements OnApplicationBootstrap {
         stageCode: "LOGISTICS_REVIEW",
         gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ON_TIME_DELIVERY", operator: "GTE", threshold: 90 },
         sortOrder: 4
+      },
+      {
+        code: "LOGISTICS-EMERGENCY-01",
+        type: "SCENARIO_DECISION",
+        prompt: "发生航线中断或配送节点不可用时，请填写事件判断、应急救援动作和恢复检查。",
+        correctAnswer: null,
+        explanation: "应急救援题要求先说明受影响任务，再选择备降、返航或重调度动作，并记录恢复条件。",
+        maxScore: 20,
+        stageCode: "LOGISTICS_EMERGENCY_HANDLING",
+        gradingRule: { kind: "REQUIRED_FIELDS", fields: ["eventAssessment", "actionPlan", "recoveryCheck"] },
+        sortOrder: 5
       }
     ])
-    bank = await this.questionBanks.save(this.questionBanks.create({
+    return this.ensurePublishedQuestionBank(teacher, {
       title,
       sceneType: "CITY_LOGISTICS",
-      summary: "覆盖物流安全判断、航线规划、时刻表设计和仿真准时率证据。",
-      status: "DRAFT",
-      currentVersion: 1,
-      createdBy: teacher
-    }))
-    await this.questionBankVersions.save(this.questionBankVersions.create({
-      bank,
-      version: 1,
-      status: "PUBLISHED",
+      summary: "覆盖物流安全判断、航线规划、时刻表设计、航线中断应急处置和仿真准时率证据。",
       questions,
-      createdBy: teacher,
-      changeNote: "开发环境物流示例题库",
-      publishedAt: new Date()
-    }))
-    bank.status = "PUBLISHED"
-    await this.questionBanks.save(bank)
-    return bank
+      changeNote: "开发环境物流示例题库"
+    })
   }
 
   private async ensureSceneQuestionBank(teacher: UserEntity, title: string, sceneType: SceneType, summary: string, definitions: Array<Partial<QuestionDefinition> & Pick<QuestionDefinition, "code" | "type" | "prompt" | "gradingRule" | "stageCode" | "sortOrder">>) {
-    if (await this.questionBanks.findOne({ where: { title } })) return
     const questions = normalizeQuestionDefinitions(definitions.map((question) => ({
       ...question,
       difficulty: question.difficulty ?? "INTERMEDIATE",
@@ -445,10 +440,66 @@ export class SeedService implements OnApplicationBootstrap {
       explanation: question.explanation ?? "系统先检查结构化字段或仿真指标，再由教师结合运行证据复核。",
       maxScore: question.maxScore ?? (question.type === "SIMULATION_EVIDENCE" ? 50 : 25)
     })))
-    const bank = await this.questionBanks.save(this.questionBanks.create({ title, sceneType, summary, status: "DRAFT", currentVersion: 1, createdBy: teacher }))
-    await this.questionBankVersions.save(this.questionBankVersions.create({ bank, version: 1, status: "PUBLISHED", questions, createdBy: teacher, changeNote: "开发环境三场景示例题库", publishedAt: new Date() }))
+    await this.ensurePublishedQuestionBank(teacher, { title, sceneType, summary, questions, changeNote: "开发环境三场景示例题库" })
+  }
+
+  /**
+   * Keep demo question banks useful after the database has already been seeded.
+   * Published versions are immutable because assignments keep their version id;
+   * a changed seed definition therefore creates one new published version while
+   * leaving historical student work readable.
+   */
+  private async ensurePublishedQuestionBank(teacher: UserEntity, input: {
+    title: string
+    sceneType: SceneType
+    summary: string
+    questions: QuestionDefinition[]
+    changeNote: string
+  }) {
+    let bank = await this.questionBanks.findOne({ where: { title: input.title } })
+    if (!bank) {
+      bank = await this.questionBanks.save(this.questionBanks.create({
+        title: input.title,
+        sceneType: input.sceneType,
+        summary: input.summary,
+        status: "DRAFT",
+        currentVersion: 0,
+        createdBy: teacher
+      }))
+    }
+    const metadataChanged = bank.sceneType !== input.sceneType || bank.summary !== input.summary
+    if (metadataChanged) {
+      bank.sceneType = input.sceneType
+      bank.summary = input.summary
+    }
+
+    const versions = await this.questionBankVersions.find({
+      where: { bank: { id: bank.id } },
+      order: { version: "DESC" }
+    })
+    const digest = sha256Canonical(input.questions)
+    const alreadyPublished = versions.some((version) => version.status === "PUBLISHED" && sha256Canonical(normalizeQuestionDefinitions(version.questions)) === digest)
+    if (alreadyPublished) {
+      if (metadataChanged || bank.status !== "PUBLISHED") {
+        bank.status = "PUBLISHED"
+        await this.questionBanks.save(bank)
+      }
+      return bank
+    }
+
+    const nextVersion = Math.max(bank.currentVersion ?? 0, ...versions.map((version) => version.version)) + 1
+    await this.questionBankVersions.save(this.questionBankVersions.create({
+      bank,
+      version: nextVersion,
+      status: "PUBLISHED",
+      questions: input.questions,
+      createdBy: teacher,
+      changeNote: input.changeNote,
+      publishedAt: new Date()
+    }))
+    bank.currentVersion = nextVersion
     bank.status = "PUBLISHED"
-    await this.questionBanks.save(bank)
+    return this.questionBanks.save(bank)
   }
 }
 
