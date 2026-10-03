@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { LogisticsRouteInput, LogisticsRuntimeAircraftView, LogisticsRuntimeEventView, LogisticsRuntimeRouteView } from "@wurenji/shared"
-import { logisticsFocusCoordinates, logisticsNodeTypeVisible, logisticsRuntimeFocusCoordinates } from "./logistics-map-tools"
+import { isSelectedLogisticsRouteEntity, logisticsFocusCoordinates, logisticsNodeTypeVisible, logisticsRuntimeFocusCoordinates } from "./logistics-map-tools"
 
 const route = {
   id: "route-1",
@@ -14,6 +14,13 @@ describe("SCN-003/005 logistics map tools", () => {
   it("filters node types independently", () => {
     expect(logisticsNodeTypeVisible("WAITING_POINT", ["WAITING_POINT"])).toBe(true)
     expect(logisticsNodeTypeVisible("ALTERNATE_LANDING_POINT", ["WAITING_POINT"])).toBe(false)
+  })
+
+  it("recognizes route geometry for insertion on the selected route", () => {
+    expect(isSelectedLogisticsRouteEntity("log-route:route-1:center:0", "route-1")).toBe(true)
+    expect(isSelectedLogisticsRouteEntity("log-route:route-1:protection:0", "route-1")).toBe(true)
+    expect(isSelectedLogisticsRouteEntity("log-route:route-2:center:0", "route-1")).toBe(false)
+    expect(isSelectedLogisticsRouteEntity("log-waypoint:route-1:waypoint-1", "route-1")).toBe(false)
   })
 
   it("focuses a selected waypoint before its route", () => {
