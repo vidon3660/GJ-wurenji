@@ -3,6 +3,7 @@ import type { V3RegionCatalogItem } from "@wurenji/shared"
 import {
   DEFAULT_LOGISTICS_BUILDINGS_URL,
   buildingHeightMeters,
+  hasRenderableOfflineBuildingFeatures,
   resolveBuildingDataUrl,
   stableBuildingSeed
 } from "./map-building-layer"
@@ -42,5 +43,12 @@ describe("map building layer resolution", () => {
     expect(first).toBeGreaterThan(0)
     expect(first).toBe(buildingHeightMeters(undefined, "building-a"))
     expect(stableBuildingSeed("building-a")).toBe(stableBuildingSeed("building-a"))
+  })
+
+  it("keeps manifest footprints when an external package is missing or empty", () => {
+    expect(hasRenderableOfflineBuildingFeatures(0)).toBe(false)
+    expect(hasRenderableOfflineBuildingFeatures(-1)).toBe(false)
+    expect(hasRenderableOfflineBuildingFeatures(Number.NaN)).toBe(false)
+    expect(hasRenderableOfflineBuildingFeatures(1)).toBe(true)
   })
 })
