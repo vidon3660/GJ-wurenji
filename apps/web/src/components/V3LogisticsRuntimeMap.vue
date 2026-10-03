@@ -97,6 +97,7 @@ let removePerformanceTuning: (() => void) | null = null
 let removeCameraConstraints: (() => void) | null = null
 let removePostRenderListener: (() => void) | null = null
 let mapResourceGeneration = 0
+let offlineBuildingGeneration = 0
 let handler: ScreenSpaceEventHandler | null = null
 let staticSource: CustomDataSource | null = null
 let routeSource: CustomDataSource | null = null
@@ -207,6 +208,7 @@ onBeforeUnmount(() => {
   runtimeRenderFrame = null
   viewerReady.value = false
   mapResourceGeneration += 1
+  offlineBuildingGeneration += 1
   removePerformanceTuning?.()
   removePerformanceTuning = null
   removeCameraConstraints?.()
@@ -245,17 +247,25 @@ onBeforeUnmount(() => {
 })
 
 async function loadOfflineLogisticsResources() {
+  const generation = ++offlineBuildingGeneration
+  if (offlineBuildingsSource && viewer && !viewer.isDestroyed()) viewer.dataSources.remove(offlineBuildingsSource, true)
+  offlineBuildingsSource = null
+  offlineBuildingHeights.clear()
   if (!viewer || viewer.isDestroyed()) return
   const center = props.region?.center
   if (!center || center.longitude < 113.10 || center.longitude > 113.50 || center.latitude < 22.95 || center.latitude > 23.20) return
   const { GeoJsonDataSource, HeightReference, JulianDate, Color, ColorMaterialProperty, ConstantProperty } = await import("cesium")
+  if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) return
   const buildingsUrl = ((import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined)
     ?? props.region?.layers.find((layer) => layer.code === "BUILDINGS")?.dataUrl
     ?? "/map/logistics/gd-north-core-buildings.geojson").trim()
   try {
-    offlineBuildingsSource = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
-    if (!viewer || viewer.isDestroyed()) return
-    for (const entity of offlineBuildingsSource.entities.values) {
+    const source = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
+    if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) {
+      source.entities.removeAll()
+      return
+    }
+    for (const entity of source.entities.values) {
       if (!entity.polygon) continue
       const rawHeight = entity.properties?.height?.getValue(JulianDate.now())
       const heightMeters = Number.isFinite(Number(rawHeight)) && Number(rawHeight) > 0 ? Number(rawHeight) : 8 + (stableBuildingSeed(entity.id) % 35)
@@ -268,10 +278,11 @@ async function loadOfflineLogisticsResources() {
       entity.polygon.outline = new ConstantProperty(true)
       entity.polygon.outlineColor = new ConstantProperty(Color.WHITE.withAlpha(0.9))
     }
-    viewer.dataSources.add(offlineBuildingsSource)
+    offlineBuildingsSource = source
+    viewer.dataSources.add(source)
     syncOfflineBuildingMode()
   } catch {
-    offlineBuildingsSource = null
+    if (generation === offlineBuildingGeneration) offlineBuildingsSource = null
   }
 }
 
@@ -294,6 +305,7 @@ watch(() => regionMapResourceKey(props.region), () => {
   removeCameraConstraints?.()
   removeCameraConstraints = viewer ? configureRegionMapConstraints(viewer, props.region) : null
   renderStatic()
+  void loadOfflineLogisticsResources()
 })
 watch(() => regionMapResourceKey(props.region), () => { void reloadMapResources() })
 watch(() => [logisticsRouteRenderSignature(props.routes), props.selectedRouteId], scheduleRuntimeEntitiesRender)

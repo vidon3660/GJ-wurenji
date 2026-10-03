@@ -6,6 +6,10 @@ artifacts/
 onlyoffice-documentserver-*.tar
 onlyoffice-documentserver-*.parts-*/
 apps/web/public/map/
+!apps/web/public/map/
+!apps/web/public/map/logistics/
+!apps/web/public/map/logistics/gd-north-core-orthophoto.jpg
+!apps/web/public/map/logistics/gd-north-core-buildings.geojson
 data/map/
 *.tsbuildinfo
 .env
@@ -27,4 +31,3 @@ packages/*/node_modules/
 packages/*/dist/
 apps/*/node_modules/
 apps/*/dist/
-

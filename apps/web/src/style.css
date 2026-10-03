@@ -35,7 +35,10 @@ body,
 }
 
 body {
-  min-width: 960px;
+  /* Allow the responsive shells to reach phone widths.  Individual desktop
+   * workbenches keep their own minimums and can scroll when their canvas
+   * needs more room; the document itself must not force a 960px viewport. */
+  min-width: 320px;
 }
 
 button,
@@ -5145,6 +5148,7 @@ button:active:not(:disabled),
 .login-submit { min-height: 48px; border-radius: 4px; background: #147b58; }
 .demo-actions { gap: 10px; }
 .login-button--secondary { min-height: 40px; border-radius: 4px; }
+.demo-hint { margin: 10px 0 0; color: #74847c; font-size: 11px; line-height: 1.5; text-align: center; }
 @media (max-width: 760px) {
   .login-page { grid-template-columns: 1fr; }
   .login-visual { min-height: 330px; }

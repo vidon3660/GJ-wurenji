@@ -28,7 +28,7 @@ function stageStatusLabel(stage: StudentProjectStageView) {
         </button>
       </li>
     </ol>
-    <button v-for="stage in project?.stages ?? []" :key="stage.stageCode" type="button" :class="{ active: selectedStageCode === stage.stageCode, locked: stage.status === 'LOCKED' }" :aria-current="selectedStageCode === stage.stageCode ? 'step' : undefined" :aria-disabled="stage.status === 'LOCKED' ? 'true' : undefined" :aria-label="`${stage.title}，${stageStatusLabel(stage)}${stage.status === 'LOCKED' ? `，开放条件：${studentStageOpenConditionLabel(stage)}` : ''}`" @click="emit('select', stage.stageCode)">
+    <button v-for="stage in project?.stages ?? []" :key="stage.stageCode" type="button" :disabled="stage.status === 'LOCKED'" :class="{ active: selectedStageCode === stage.stageCode, locked: stage.status === 'LOCKED' }" :aria-current="selectedStageCode === stage.stageCode ? 'step' : undefined" :aria-label="`${stage.title}，${stageStatusLabel(stage)}${stage.status === 'LOCKED' ? `，开放条件：${studentStageOpenConditionLabel(stage)}` : ''}`" @click="stage.status !== 'LOCKED' && emit('select', stage.stageCode)">
       <span>{{ String(stage.sequence).padStart(2, '0') }}</span>
       <div><strong>{{ stage.title }}</strong><small>{{ stageStatusLabel(stage) }}</small></div>
       <el-icon v-if="stage.status === 'LOCKED'"><Lock /></el-icon><el-icon v-else-if="stage.status === 'ACCEPTED'"><Check /></el-icon><i v-else />

@@ -70,10 +70,13 @@ npm run dev
 ```bash
 npm run build
 npm test
+npm run map:demo-assets       # 需要重建仓库自带的轻量教学区离线底图时执行
 npm run visual:smoke
 ```
 
 `visual:smoke` 要求应用已在 `3000` 端口运行，并使用本机 Chrome 验证教师/学生工作台、Cesium WebGL 画布和 2D/3D 切换。截图输出到 `/tmp/wurenji-visual`。
+
+仓库已内置一套可直接运行的轻量教学区离线资源：`apps/web/public/map/logistics/` 下的单幅影像和建筑 GeoJSON，供物流 2D/3D 页面在没有外部地图服务时完成教学演示。它是可替换的演示数据，不代表正式测绘成果；接入正式资源后，使用对应资源包的 URL、范围和 SHA-256，并重新构建前端。
 
 ### 交付验收
 

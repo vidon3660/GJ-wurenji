@@ -109,6 +109,7 @@ let removeTileLoadProgressListener: (() => void) | null = null
 let activeResourceCleanup: (() => void) | null = null
 let removePerformanceTuning: (() => void) | null = null
 let mapResourceGeneration = 0
+let offlineBuildingGeneration = 0
 let handler: ScreenSpaceEventHandler | null = null
 let regionSource: CustomDataSource | null = null
 let layerSource: CustomDataSource | null = null
@@ -205,6 +206,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown)
   viewerReady.value = false
   mapResourceGeneration += 1
+  offlineBuildingGeneration += 1
   removePerformanceTuning?.()
   removePerformanceTuning = null
   removeTileLoadProgressListener?.()
@@ -233,6 +235,10 @@ onBeforeUnmount(() => {
 })
 
 async function loadOfflineLogisticsResources() {
+  const generation = ++offlineBuildingGeneration
+  if (offlineBuildingsSource && viewer && !viewer.isDestroyed()) viewer.dataSources.remove(offlineBuildingsSource, true)
+  offlineBuildingsSource = null
+  offlineBuildingHeights.clear()
   if (!viewer || viewer.isDestroyed()) return
   // 提供的 L17/建筑数据覆盖广州北部教学区；其他预设区域继续使用其自身资源，避免错位叠加。
   const center = props.region.center
@@ -241,9 +247,12 @@ async function loadOfflineLogisticsResources() {
     ?? props.region.layers.find((layer) => layer.code === "BUILDINGS")?.dataUrl
     ?? "/map/logistics/gd-north-core-buildings.geojson").trim()
   try {
-    offlineBuildingsSource = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
-    if (!viewer || viewer.isDestroyed()) return
-    for (const entity of offlineBuildingsSource.entities.values) {
+    const source = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
+    if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) {
+      source.entities.removeAll()
+      return
+    }
+    for (const entity of source.entities.values) {
       if (!entity.polygon) continue
       const rawHeight = entity.properties?.height?.getValue(JulianDate.now())
       const seed = stableBuildingSeed(entity.id)
@@ -260,10 +269,11 @@ async function loadOfflineLogisticsResources() {
       entity.polygon.outline = new ConstantProperty(true)
       entity.polygon.outlineColor = new ConstantProperty(Color.WHITE.withAlpha(0.9))
     }
-    viewer.dataSources.add(offlineBuildingsSource)
+    offlineBuildingsSource = source
+    viewer.dataSources.add(source)
     syncOfflineBuildingVisibility()
   } catch {
-    offlineBuildingsSource = null
+    if (generation === offlineBuildingGeneration) offlineBuildingsSource = null
   }
 }
 
@@ -285,7 +295,10 @@ function stableBuildingSeed(value: string): number {
 }
 
 watch(() => props.region, renderAll, { deep: true })
-watch(() => regionMapResourceKey(props.region), () => { void reloadMapResources() })
+watch(() => regionMapResourceKey(props.region), () => {
+  void reloadMapResources()
+  void loadOfflineLogisticsResources()
+})
 watch(() => props.visibleLayers, () => { renderLayers(); syncOfflineBuildingVisibility() }, { deep: true })
 watch(() => props.visibleNodeTypes, renderNodes, { deep: true })
 watch(() => props.showLabels, renderAll)

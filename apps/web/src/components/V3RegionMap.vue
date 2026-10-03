@@ -549,6 +549,21 @@ function configureEditorInteractions() {
       emit("editorMapSelected", pickedId.slice("editor:".length))
       return
     }
+    // Vertex handles and labels are rendered as separate Cesium entities.
+    // Treat them as the parent overlay object so selecting a handle never
+    // falls through to the map drawing handler and accidentally adds a point.
+    if (pickedId.startsWith("editor-vertex:")) {
+      const raw = pickedId.slice("editor-vertex:".length)
+      const separator = raw.lastIndexOf(":")
+      if (separator > 0) {
+        emit("editorMapSelected", raw.slice(0, separator))
+        return
+      }
+    }
+    if (pickedId.startsWith("editor-label:")) {
+      emit("editorMapSelected", pickedId.slice("editor-label:".length))
+      return
+    }
     const coordinate = editorPickCoordinate(movement.position)
     if (coordinate) emit("editorMapClick", coordinate)
   }, ScreenSpaceEventType.LEFT_CLICK)
@@ -1199,9 +1214,11 @@ function focusMapRegion() {
 
 function focusEditorFeature(id: string) {
   const feature = (props.editorFeatures ?? []).find((item) => item.id === id)
-  const point = feature?.position ?? feature?.positions?.[0]
-  if (!viewer || !point) return
-  focusV3Coordinates(viewer, [point], props.mode, 0.45)
+  const points = feature?.positions ?? (feature?.position ? [feature.position] : [])
+  if (!viewer || points.length === 0) return
+  // Frame the whole line/polygon when the object list is used for navigation;
+  // focusing only the first vertex made long routes appear partially off-screen.
+  focusV3Coordinates(viewer, points, props.mode, 0.45)
 }
 
 function zoomMapIn() {
