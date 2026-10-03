@@ -66,6 +66,7 @@ import V3MapTerrainNotice from "./V3MapTerrainNotice.vue"
 import { vtlLandingSiteLabelText, vtlTaskLabelText } from "../vtl-map-labels"
 import { featureHeightMeters, isObstacleFeature, obstacleRadiusMeters } from "../map-3d-feature"
 import { parseVtlMapPickId } from "../vtl-map-picking"
+import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
 
 const props = defineProps<{
   region: V3RegionCatalogItem | null
@@ -174,7 +175,10 @@ function syncCameraDetailTier() {
 
 async function loadOfflineBuildingLayer() {
   if (!viewer || viewer.isDestroyed()) return
-  const url = props.region?.layers.find((layer) => layer.code === "BUILDINGS")?.dataUrl?.trim() ?? ""
+  const url = resolveBuildingDataUrl(
+    props.region,
+    (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
+  )
   const generation = ++offlineBuildingGeneration
   if (offlineBuildingSource) {
     viewer.dataSources.remove(offlineBuildingSource, true)
@@ -193,10 +197,7 @@ async function loadOfflineBuildingLayer() {
       const rawHeight = entity.properties?.height?.getValue(JulianDate.now())
         ?? entity.properties?.height_m?.getValue(JulianDate.now())
         ?? entity.properties?.building_levels?.getValue(JulianDate.now())
-      const parsedHeight = Number(rawHeight)
-      const heightMeters = Number.isFinite(parsedHeight) && parsedHeight > 0
-        ? parsedHeight
-        : 8 + (stableOfflineBuildingSeed(String(entity.id)) % 35)
+      const heightMeters = buildingHeightMeters(rawHeight, String(entity.id))
       offlineBuildingHeights.set(String(entity.id), heightMeters)
       entity.name = entity.name || `离线建筑 ${entity.id}`
       entity.polygon.height = new ConstantProperty(0)
@@ -224,12 +225,6 @@ function syncOfflineBuildingVisibility() {
       entity.polygon.extrudedHeight = new ConstantProperty(props.mode === "3d" ? heightMeters : 0)
     }
   }
-}
-
-function stableOfflineBuildingSeed(value: string): number {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619)
-  return Math.abs(hash >>> 0)
 }
 
 async function reloadMapResources() {
@@ -453,6 +448,10 @@ function renderLayers() {
   // twice, even while a layer is being refreshed.
   const renderedFeatureIds = new Set<string>()
   const renderBuildingDetail = shouldRenderBuildingDetail(cameraDetailTier)
+  const configuredBuildingsUrl = resolveBuildingDataUrl(
+    props.region,
+    (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
+  )
   for (const layer of props.region.layers) {
     if (!visible.has(layer.code) || layer.state === "UNAVAILABLE") continue
     if (!renderBuildingDetail && layer.code === "BUILDINGS") continue
@@ -461,7 +460,7 @@ function renderLayers() {
       // polygons for validation. The real light-gray building layer is loaded
       // from the package BUILDINGS GeoJSON below; do not render those legacy
       // dark block polygons a second time.
-      if (layer.code === "BUILDINGS" && layer.dataUrl && feature.properties?.category === "BUILDING") continue
+      if (layer.code === "BUILDINGS" && configuredBuildingsUrl && feature.properties?.category === "BUILDING") continue
       addFeature(layer.code, feature, renderedFeatureIds)
     }
   }
