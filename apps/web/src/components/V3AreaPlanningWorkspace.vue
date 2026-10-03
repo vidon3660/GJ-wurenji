@@ -1067,4 +1067,18 @@ function formatDistance(value: number) {
 .area-planning-load-error button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #247253; border-radius: 3px; padding: 7px 10px; color: white; background: #247253; font-size: 11px; cursor: pointer; }
 .area-planning-load-error button:disabled { cursor: not-allowed; opacity: .48; }
 .area-load-error { margin: 0; padding: 7px 10px; border-left: 3px solid #a14b3f; color: #8b3f35; background: #fff1ef; font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .area-planning-workspace { display: flex; grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow: auto; flex-direction: column; }
+  .area-planning-canvas { flex: 0 0 clamp(360px, 60dvh, 560px); min-height: 360px; }
+  .area-planning-inspector { flex: 0 0 auto; min-height: 0; overflow: visible; }
+}
+@media (max-width: 420px) {
+  .area-planning-canvas { flex-basis: 380px; }
+  .area-map-toolbar { top: 8px; left: 8px; max-width: calc(100% - 16px); overflow-x: auto; }
+  .area-map-caption, .area-tool-status { left: 8px; }
+  .area-map-caption { right: 8px; bottom: 8px; }
+  .area-property-editor, .area-annotation-editor, .area-review-panel { padding: 10px; }
+  .property-pair { grid-template-columns: 1fr; }
+}
 </style>

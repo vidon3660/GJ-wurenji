@@ -244,4 +244,16 @@ function round(value: number) {
 .questionnaire-scoring-guide { display: flex; flex-wrap: wrap; gap: 6px; }
 .questionnaire-scoring-guide span { border: 1px solid #d8e8dd; padding: 3px 6px; background: #f2f8f4; color: #527263; font-size: 10px; }
 .questionnaire-scoring-guide span:last-child { border-color: #e4d8bb; background: #fff8e9; color: #8b6b35; }
+
+
+@media (max-width: 420px) {
+  .questionnaire-panel { padding: 0; }
+  .questionnaire-header { gap: 10px; padding-bottom: 12px; }
+  .questionnaire-header h2 { font-size: 18px; }
+  .question-card { padding: 11px; }
+  .question-card h3 { margin: 11px 0 10px; font-size: 12px; }
+  .questionnaire-footer { align-items: stretch; flex-direction: column; }
+  .questionnaire-footer .el-button { width: 100%; }
+}
+
 </style>

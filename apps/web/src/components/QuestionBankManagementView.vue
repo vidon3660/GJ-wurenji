@@ -603,4 +603,17 @@ h2 { margin-top: 5px; font-size: 20px; letter-spacing: 0; }
 @media (max-width: 900px) { .question-bank-layout { grid-template-columns: 1fr; }.question-bank-list { min-height: 0; }.question-bank-list > button { display: inline-flex; width: calc(50% - 2px); vertical-align: top; }.question-bank-list { padding-bottom: 8px; }.question-bank-list header { margin-bottom: 4px; }.question-bank-page { padding: 20px 16px 32px; } }
 @media (max-width: 620px) { .question-bank-page-header, .editor-header, .version-toolbar, .editor-footer { display: grid; }.question-bank-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }.question-bank-actions .el-button { width: 100%; margin-left: 0; }.question-bank-actions .el-button:last-child { grid-column: 1 / -1; }.editor-footer > div { width: 100%; grid-template-columns: 1fr; }.editor-footer .el-input { width: 100%; }.editor-unsaved-hint { position: static; }.question-editor-grid, .rule-row { grid-template-columns: 1fr; }.question-bank-list > button { width: 100%; }.version-toolbar select { min-width: 0; width: 100%; } }
 @media (max-width: 700px) { .audit-summary { grid-template-columns: repeat(2, 1fr); }.audit-toolbar { align-items: stretch; flex-direction: column; }.audit-toolbar .el-radio-group { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }.audit-toolbar .el-radio-button { min-width: 0; }.audit-toolbar :deep(.el-radio-button__inner) { width: 100%; padding-inline: 6px; }.audit-row { min-width: 800px; }.audit-table { margin-inline: -1px; } }
+@media (max-width: 380px) {
+  .question-bank-page { padding-inline: 10px; }
+  .question-bank-actions { grid-template-columns: 1fr; }
+  .question-bank-actions .el-button,
+  .question-bank-actions .el-button:last-child { grid-column: auto; width: 100%; }
+  .audit-summary { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .audit-summary > div { padding: 9px; }
+  .audit-summary strong { font-size: 19px; }
+  .question-list { padding-inline: 12px; }
+  .editor-header { padding-inline: 14px; }
+  .version-toolbar { padding-inline: 14px; }
+  .editor-footer { margin-inline: 14px; }
+}
 </style>

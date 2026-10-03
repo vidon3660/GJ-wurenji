@@ -348,4 +348,13 @@ function environmentDiagnosticClass(status: string) {
 @media (max-width: 760px) {
   .region-editor-page { height: auto; min-height: 0; overflow: visible; }
 }
+@media (max-width: 640px) {
+  .region-library-page { padding-inline: 10px; }
+  .region-map-canvas { height: min(62dvh, 460px); min-height: 300px; }
+  .region-actions { flex-wrap: wrap; }
+  .region-actions .el-button,
+  .region-actions .view-segment { min-width: 0; flex: 1 1 120px; }
+  .region-editor-guide { gap: 12px; padding: 14px 12px; }
+  .region-editor-guide ol { gap: 9px; }
+}
 </style>

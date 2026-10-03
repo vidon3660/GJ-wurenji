@@ -195,4 +195,18 @@ function formatTime(value: string | null) {
 .flight-end-readonly span { color: #64786e; font-size: 11px; }
 @media (max-width: 900px) { .flight-end-summary { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .flight-end-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-columns: 1fr; grid-template-rows: auto 620px auto; } .flight-end-workspace > header { grid-column: 1; } .flight-end-workspace > aside { border-top: 1px solid #d1ddd7; border-left: 0; } .flight-end-load-error { align-items: stretch; flex-direction: column; } .flight-end-load-error-full { margin: 12px; } }
+
+@media (max-width: 760px) {
+  .flight-end-workspace { display: flex; grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow: auto; flex-direction: column; }
+  .flight-end-workspace > header { flex: 0 0 auto; }
+  .flight-end-workspace > main { flex: 1 1 auto; min-height: 520px; padding: 18px 12px; }
+  .flight-end-workspace > aside { flex: 0 0 auto; border-top: 1px solid #d1ddd7; border-left: 0; }
+}
+@media (max-width: 420px) {
+  .flight-end-workspace > header { align-items: flex-start; flex-direction: column; gap: 8px; padding: 12px; }
+  .flight-end-summary strong { font-size: 20px; }
+  .flight-end-times { grid-template-columns: 1fr; }
+  .completion-options { grid-template-columns: 1fr; }
+  .count-inputs { grid-template-columns: 1fr; gap: 8px; }
+}
 </style>

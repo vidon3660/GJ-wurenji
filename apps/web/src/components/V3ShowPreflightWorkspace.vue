@@ -233,4 +233,16 @@ function sourceLabel(status: ShowPreflightItemView["sourceStatus"]) {
 .preflight-load-panel .el-icon { color: #a14b3f; font-size: 28px; }
 .preflight-load-panel strong { color: #8b3f35; font-size: 13px; }
 .preflight-load-panel span { max-width: 48ch; font-size: 11px; line-height: 1.6; }
+
+@media (max-width: 760px) {
+  .preflight-workspace { display: flex; grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow: auto; flex-direction: column; }
+  .preflight-header { flex: 0 0 auto; }
+  .preflight-list { flex: 1 1 auto; min-height: 520px; }
+  .preflight-decision { flex: 0 0 auto; border-top: 1px solid #d3ddd8; border-left: 0; }
+}
+@media (max-width: 420px) {
+  .preflight-header { align-items: flex-start; gap: 9px; padding: 12px; }
+  .preflight-row { grid-template-columns: 20px minmax(0, 1fr) 58px; gap: 6px; }
+  .preflight-list { padding: 10px 9px 18px; }
+}
 </style>

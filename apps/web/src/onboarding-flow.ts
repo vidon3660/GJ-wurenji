@@ -13,30 +13,76 @@ interface StorageLike {
   removeItem(key: string): void
 }
 
+const fallbackValues = new Map<string, string>()
+const fallbackStorage: StorageLike = {
+  getItem: (key) => fallbackValues.get(key) ?? null,
+  setItem: (key, value) => fallbackValues.set(key, value),
+  removeItem: (key) => fallbackValues.delete(key)
+}
+
+/**
+ * localStorage can be unavailable in an embedded webview, private browsing
+ * session, or when the browser has blocked storage for this origin. The guide
+ * should remain usable in all three cases; the in-memory store keeps the
+ * current session usable and the persistence helpers below silently degrade.
+ */
+export function getOnboardingStorage(): StorageLike {
+  if (typeof window === "undefined") return fallbackStorage
+  try {
+    return window.localStorage
+  } catch {
+    return fallbackStorage
+  }
+}
+
+function read(storage: StorageLike, key: string): string | null {
+  try {
+    return storage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function write(storage: StorageLike, key: string, value: string): void {
+  try {
+    storage.setItem(key, value)
+  } catch {
+    // Storage is an enhancement. Do not block the guided operation when it is unavailable.
+  }
+}
+
+function remove(storage: StorageLike, key: string): void {
+  try {
+    storage.removeItem(key)
+  } catch {
+    // See write().
+  }
+}
+
 function onboardingStorageKey(userId: string, state: OnboardingState, suffix: string): string {
   return `wurenji:onboarding:${userId}:${state.guideKey}:v${state.version}:${suffix}`
 }
 
 export function loadOnboardingStep(storage: StorageLike, userId: string, state: OnboardingState, stepCount: number): number {
-  const value = Number(storage.getItem(onboardingStorageKey(userId, state, "step")))
+  const value = Number(read(storage, onboardingStorageKey(userId, state, "step")))
   return Number.isInteger(value) && value >= 0 && value < stepCount ? value : 0
 }
 
 export function saveOnboardingStep(storage: StorageLike, userId: string, state: OnboardingState, step: number): void {
-  storage.setItem(onboardingStorageKey(userId, state, "step"), String(step))
+  write(storage, onboardingStorageKey(userId, state, "step"), String(step))
 }
 
 export function clearOnboardingProgress(storage: StorageLike, userId: string, state: OnboardingState): void {
-  storage.removeItem(onboardingStorageKey(userId, state, "step"))
+  remove(storage, onboardingStorageKey(userId, state, "step"))
   clearOnboardingMission(storage, userId, state)
 }
 
 export function clearOnboardingMission(storage: StorageLike, userId: string, state: OnboardingState): void {
-  storage.removeItem(onboardingStorageKey(userId, state, "mission"))
+  remove(storage, onboardingStorageKey(userId, state, "mission"))
 }
 
 export function loadOnboardingMission(storage: StorageLike, userId: string, state: OnboardingState): OnboardingMission | null {
-  const serialized = storage.getItem(onboardingStorageKey(userId, state, "mission"))
+  const serialized = read(storage, onboardingStorageKey(userId, state, "mission"))
   if (!serialized) return null
   try {
     const value = JSON.parse(serialized) as Partial<OnboardingMission>
@@ -48,5 +94,5 @@ export function loadOnboardingMission(storage: StorageLike, userId: string, stat
 }
 
 export function saveOnboardingMission(storage: StorageLike, userId: string, state: OnboardingState, mission: OnboardingMission): void {
-  storage.setItem(onboardingStorageKey(userId, state, "mission"), JSON.stringify(mission))
+  write(storage, onboardingStorageKey(userId, state, "mission"), JSON.stringify(mission))
 }

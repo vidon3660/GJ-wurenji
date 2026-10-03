@@ -944,7 +944,7 @@ function formatDistance(value: number): string {
         </el-tooltip>
       </div>
       <section v-if="selectedAnnotation" class="route-map-tool-panel annotation">
-        <header><div><span>MAP NOTE</span><strong>地图文字标注</strong></div><button type="button" aria-label="删除标注" :disabled="!canEdit" @click="removeSelectedAnnotation"><el-icon><Delete /></el-icon></button></header>
+        <header><div><strong>地图文字标注</strong></div><button type="button" aria-label="删除标注" :disabled="!canEdit" @click="removeSelectedAnnotation"><el-icon><Delete /></el-icon></button></header>
         <el-input :model-value="selectedAnnotation.label" :disabled="!canEdit" maxlength="120" @update:model-value="updateAnnotationLabel" />
         <dl>
           <div><dt>{{ formatCoordinateReference('WGS84') }}</dt><dd>{{ selectedAnnotation.position.longitude.toFixed(7) }}, {{ selectedAnnotation.position.latitude.toFixed(7) }}</dd></div>
@@ -952,7 +952,7 @@ function formatDistance(value: number): string {
         </dl>
       </section>
       <section v-else-if="distanceMeasurement" class="route-map-tool-panel measurement">
-        <header><div><span>MEASURE</span><strong>距离与方位</strong></div><button type="button" aria-label="清除测量" @click="distanceMeasurement = null"><el-icon><Delete /></el-icon></button></header>
+        <header><div><strong>距离与方位</strong></div><button type="button" aria-label="清除测量" @click="distanceMeasurement = null"><el-icon><Delete /></el-icon></button></header>
         <p><b>{{ formatDistance(distanceMeasurement.distanceMeters) }}</b><strong>{{ distanceMeasurement.bearingDegrees.toFixed(1) }}°</strong></p>
         <dl>
           <div><dt>起点</dt><dd>{{ distanceMeasurement.start.longitude.toFixed(6) }}, {{ distanceMeasurement.start.latitude.toFixed(6) }} · {{ distanceMeasurement.start.heightMeters === null ? '-' : `${distanceMeasurement.start.heightMeters.toFixed(1)} m` }}</dd></div>
@@ -1009,7 +1009,7 @@ function formatDistance(value: number): string {
         </section>
 
         <section v-if="selectedRoute" class="route-spatial-panel" aria-label="航线空间与高度关系">
-          <header><div><span>SPATIAL RELATION</span><strong>空间与高度关系</strong></div><small>{{ mapMode === '3d' ? '三维净空' : '二维保护区' }}</small></header>
+          <header><div><strong>空间与高度关系</strong></div><small>{{ mapMode === '3d' ? '三维净空' : '二维保护区' }}</small></header>
           <div class="route-spatial-kpis"><span><b>{{ selectedSpatialRelationCounts.conflict }}</b><small>冲突</small></span><span><b>{{ selectedSpatialRelationCounts.risk }}</b><small>风险</small></span><span><b>{{ selectedSpatialRelationCounts.clear }}</b><small>净空充足</small></span></div>
           <button v-for="relation in selectedSpatialRelations" :key="relation.id" type="button" :class="relation.status.toLowerCase()" :aria-label="`航段${relation.segmentIndex + 1}，${spatialFeatureKindLabel(relation.featureKind)}${relation.featureName}，${spatialRelationStatusLabel(relation.status)}：${relation.message}`" @click="selectSpatialRelation(relation)">
             <i>{{ String(relation.segmentIndex + 1).padStart(2, '0') }}</i>
@@ -1061,7 +1061,7 @@ function formatDistance(value: number): string {
           <div v-if="displayedEvidence.length === 0" class="route-check-empty"><CircleCheck /><span>{{ checkResult ? relationOnly ? '当前航线之间未发现空间交叉' : '当前方案未发现规则问题' : '保存方案后执行权威检查' }}</span></div>
         </section>
         <section v-if="problemLocation" class="route-problem-location" aria-label="问题定位详情">
-          <header><div><span>PROBLEM LOCATION</span><strong>问题定位</strong></div><em :class="problemLocation.severity.toLowerCase()">{{ problemLocation.severity === 'CONFLICT' ? '硬性冲突' : problemLocation.severity === 'RISK' ? '运行风险' : '效率提示' }}</em></header>
+          <header><div><strong>问题定位</strong></div><em :class="problemLocation.severity.toLowerCase()">{{ problemLocation.severity === 'CONFLICT' ? '硬性冲突' : problemLocation.severity === 'RISK' ? '运行风险' : '效率提示' }}</em></header>
           <p>{{ problemLocation.message }}</p>
           <dl>
             <div><dt>问题类型</dt><dd>{{ problemLocation.problemType }}</dd></div>
@@ -1213,4 +1213,28 @@ function formatDistance(value: number): string {
 .route-load-panel button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #247253; border-radius: 3px; padding: 7px 10px; color: white; background: #247253; font-size: 11px; cursor: pointer; }
 .route-load-panel button:disabled { cursor: not-allowed; opacity: .48; }
 .route-load-error { margin: 0 12px; border-left: 3px solid #a14b3f; padding: 7px 10px; color: #8b3f35; background: #fff1ef; font-size: 11px; line-height: 1.5; }
+
+/* Workspace panes stack before the shell leaves the map a sliver of width. */
+@media (max-width: 1080px) {
+  .logistics-route-workspace { grid-column: 2 / 4; grid-row: 2 / 4; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 52vh) auto; overflow: auto; }
+  .logistics-route-inspector { border-top: 1px solid #ccd7d2; border-left: 0; overflow: visible; }
+  .route-map-tool-panel { bottom: 58px; }
+  .route-submit-actions { position: sticky; bottom: 0; }
+}
+@media (max-width: 760px) {
+  .logistics-route-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-rows: minmax(320px, 54vh) auto; }
+  .route-map-toolbar { left: 8px; max-width: calc(100% - 16px); }
+  .route-map-caption { right: 8px; bottom: 8px; left: 8px; max-width: none; }
+  .route-property-grid { grid-template-columns: 1fr; }
+  .route-workspace-tabs { grid-template-columns: repeat(3, minmax(86px, 1fr)); overflow-x: auto; }
+  .route-submit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .logistics-route-workspace { grid-template-rows: 300px auto; }
+  .route-map-tool-panel { right: 8px; bottom: 52px; width: calc(100% - 16px); }
+  .route-workspace-tabs { grid-template-columns: repeat(3, minmax(76px, 1fr)); }
+  .route-submit-actions { grid-template-columns: 1fr; }
+  .formal-package-summary { grid-column: 1; }
+}
+
 </style>

@@ -6,6 +6,10 @@ import { chromium } from "playwright-core"
 const baseUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")
 const outputPath = resolve(process.env.TEACHER_HOME_RESPONSIVE_OUTPUT ?? "artifacts/ux/teacher-home-responsive-latest.json")
 const screenshotDirectory = resolve(process.env.TEACHER_HOME_RESPONSIVE_SCREENSHOTS ?? "artifacts/ux/teacher-home-responsive")
+const teacherPassword = process.env.DEMO_TEACHER_PASSWORD ?? ""
+const storageStatePath = process.env.SESSION_STORAGE_STATE && existsSync(process.env.SESSION_STORAGE_STATE)
+  ? process.env.SESSION_STORAGE_STATE
+  : undefined
 const viewports = [
   { name: "narrow", width: 390, height: 844 },
   { name: "laptop", width: 1366, height: 768 },
@@ -18,7 +22,7 @@ const results = []
 try {
   await mkdir(screenshotDirectory, { recursive: true })
   for (const viewport of viewports) {
-    const context = await browser.newContext({ viewport, deviceScaleFactor: 1 })
+    const context = await browser.newContext({ viewport, deviceScaleFactor: 1, storageState: storageStatePath })
     const page = await context.newPage()
     const errors = []
     page.on("pageerror", (error) => errors.push(error.message))
@@ -30,11 +34,20 @@ try {
     })
 
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" })
-    await page.getByRole("button", { name: "教师演示", exact: true }).click()
+    const loginPage = page.locator(".login-page")
+    if (await loginPage.isVisible()) {
+      const demoButton = page.getByRole("button", { name: /教师演示/ }).first()
+      await demoButton.click()
+      if (!teacherPassword) {
+        throw new Error("需要登录教师账号；请设置 DEMO_TEACHER_PASSWORD，或通过 SESSION_STORAGE_STATE 提供已有会话")
+      }
+      await page.locator('input[name="password"]').fill(teacherPassword)
+      await page.getByRole("button", { name: "登录平台", exact: true }).click()
+    }
     await page.locator(".platform-shell").waitFor({ timeout: 15_000 })
     const skip = page.getByRole("button", { name: "跳过引导", exact: true })
     if (await skip.count() && await skip.first().isVisible()) await skip.first().click()
-    await page.locator(".v3-teacher-home-grid").waitFor({ timeout: 15_000 })
+    await page.locator(".education-page").first().waitFor({ timeout: 15_000 })
     await page.waitForTimeout(300)
 
     const layout = await page.evaluate(() => {
@@ -66,7 +79,7 @@ try {
           scrollContained: element.scrollWidth <= element.clientWidth + 1
         }
       })
-      const clippedControls = [...document.querySelectorAll(".v3-teacher-home-grid button, .v3-teacher-home-grid input, .v3-teacher-home-grid [role='combobox']")]
+      const clippedControls = [...document.querySelectorAll(".education-page button, .education-page input, .education-page [role='combobox']")]
         .filter(visible)
         .map((element) => {
           const rect = element.getBoundingClientRect()

@@ -535,4 +535,25 @@ function statusLabel(status: V3ScenarioOverlayVersionView["status"]) { return st
 .overlay-object-focus:focus-visible { outline: 2px solid #287252; outline-offset: 2px; }
 .overlay-editor-map-2d { position: absolute; inset: 0; z-index: 2; width: 100%; min-height: 100%; height: 100%; background: #e7eee9; }
 .overlay-editor-map-2d :deep(.v3-region-map) { width: 100%; height: 100%; min-height: 100%; }
+
+@media (max-width: 760px) {
+  .scenario-overlay-editor { min-height: 0; }
+  .overlay-editor-header { padding: 10px 12px; }
+  .overlay-editor-actions { width: 100%; flex-wrap: wrap; }
+  .overlay-editor-actions .el-button { flex: 1 1 120px; min-width: 0; }
+  .overlay-editor-layout { min-height: 0; overflow: visible; }
+  .overlay-editor-map { min-height: 390px; }
+  .overlay-editor-sidebar { max-height: none; overflow: visible; padding: 10px; }
+  .overlay-editor-guide > * { flex: 0 0 auto; }
+}
+@media (max-width: 420px) {
+  .overlay-editor-layout { grid-template-rows: 360px auto auto; }
+  .overlay-editor-map { min-height: 360px; }
+  .overlay-map-toolbar { top: 8px; right: 8px; left: 8px; align-items: flex-start; flex-direction: column; }
+  .overlay-map-mode-note { display: none; }
+  .overlay-layer-list { grid-template-columns: 1fr; }
+  .overlay-layer-list header { grid-column: auto; }
+  .overlay-layer-list button { border-right: 0; }
+  .overlay-editor-sidebar footer { display: grid; grid-template-columns: 1fr; }
+}
 </style>

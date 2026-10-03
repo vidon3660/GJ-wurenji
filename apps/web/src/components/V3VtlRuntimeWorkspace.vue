@@ -616,4 +616,24 @@ function jumpToVtlSection(selector: string) {
 @media (max-width:900px){.vtl-runtime-workspace{grid-column:2/4;grid-row:2/4;grid-template-columns:1fr;grid-template-rows:auto 41px 440px 300px 520px;overflow:auto;scroll-behavior:smooth;scroll-padding-top:120px}.vtl-runtime-commandbar{position:sticky;top:0;z-index:8;grid-column:1;grid-row:1;grid-template-columns:minmax(0,1fr) auto;box-shadow:0 4px 12px rgba(18,51,40,.12)}.vtl-runtime-actions{grid-column:1/-1;justify-content:flex-start;overflow-x:auto}.vtl-runtime-commandbar .vtl-attempt-select{grid-column:2;grid-row:1}.vtl-runtime-quick-nav{grid-column:1;grid-row:2;display:grid;position:sticky;top:0;z-index:9}.vtl-runtime-quick-nav button{min-height:30px}.vtl-situation-panel{grid-column:1;grid-row:4;min-height:0;overflow:auto;border-right:0;border-top:1px solid #c8d5ce}.vtl-runtime-map{grid-column:1;grid-row:3}.vtl-event-panel{grid-column:1;grid-row:5;min-height:0;overflow:auto;border-top:1px solid #c8d5ce;border-left:0}.runtime-clockbar{position:sticky;bottom:8px}.vtl-runtime-commandbar dl{display:none}}
 @media (max-width:680px){.vtl-runtime-workspace{grid-column:1;grid-row:3/5;grid-template-rows:auto 41px 360px 300px 560px}.vtl-runtime-commandbar{grid-template-columns:minmax(0,1fr);gap:6px;padding:8px 9px}.vtl-runtime-commandbar .vtl-attempt-select{grid-column:1;grid-row:auto;grid-template-columns:auto minmax(0,1fr)}.vtl-runtime-actions{grid-column:1;flex-wrap:wrap}.vtl-runtime-actions .event-pause-state{order:-1;max-width:none;flex:1 0 100%}.vtl-runtime-commandbar>div:first-child strong{font-size:13px}.map-situation-badge{top:8px;left:8px}.runtime-clockbar{right:7px;bottom:7px;left:7px;grid-template-columns:28px minmax(60px,1fr);gap:5px}.runtime-clockbar time{grid-column:2;font-size: 11px}.runtime-clockbar select{grid-column:1/-1;width:100%}.situation-kpis{grid-template-columns:repeat(4,1fr)}.situation-kpis span{padding:6px 4px}.situation-kpis b{font-size:11px}.vtl-runtime-map :deep(.v3-region-map-shell){min-height:0}}
 @media (prefers-reduced-motion:reduce){.vtl-runtime-workspace{scroll-behavior:auto}}
+
+@media (max-width: 1080px) {
+  .vtl-runtime-workspace { grid-column: 2 / 4; grid-row: 2 / 4; grid-template-columns: 1fr; grid-template-rows: auto 41px 420px 300px 500px; overflow: auto; scroll-padding-top: 120px; }
+  .vtl-runtime-commandbar { grid-column: 1; grid-row: 1; position: sticky; top: 0; z-index: 8; grid-template-columns: minmax(0, 1fr) auto; }
+  .vtl-runtime-quick-nav { grid-column: 1; grid-row: 2; display: grid; position: sticky; top: 0; z-index: 9; }
+  .vtl-runtime-map { grid-column: 1; grid-row: 3; }
+  .vtl-situation-panel { grid-column: 1; grid-row: 4; border-top: 1px solid #c8d5ce; border-right: 0; overflow: auto; }
+  .vtl-event-panel { grid-column: 1; grid-row: 5; border-top: 1px solid #c8d5ce; border-left: 0; overflow: auto; }
+}
+@media (max-width: 760px) {
+  .vtl-runtime-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-rows: auto 41px 360px 300px 500px; }
+}
+@media (max-width: 420px) {
+  .vtl-runtime-workspace { grid-template-rows: auto 41px 320px 300px 500px; }
+  .vtl-runtime-commandbar { grid-template-columns: minmax(0, 1fr); }
+  .vtl-runtime-commandbar .vtl-attempt-select { grid-column: 1; }
+  .vtl-runtime-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .situation-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 </style>

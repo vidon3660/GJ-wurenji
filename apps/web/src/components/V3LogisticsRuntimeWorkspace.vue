@@ -1135,7 +1135,7 @@ function dynamicScheduleModeLabel(value: string) {
         @marker-select="selectPlaybackMarker"
       />
       <section class="runtime-aircraft-monitor">
-        <header><div><span>SELECTED AIRCRAFT</span><strong class="runtime-selected-aircraft-code">{{ selectedAircraft?.code ?? '未选中无人机' }}</strong><small class="runtime-selected-aircraft-model">{{ formatAircraftModelCode(selectedAircraft?.modelCode) }}</small></div><em>{{ selectedAircraft ? aircraftStatusLabel(selectedAircraft.status) : '等待运行数据' }}</em></header>
+        <header><div><span>选中航空器</span><strong class="runtime-selected-aircraft-code">{{ selectedAircraft?.code ?? '未选中无人机' }}</strong><small class="runtime-selected-aircraft-model">{{ formatAircraftModelCode(selectedAircraft?.modelCode) }}</small></div><em>{{ selectedAircraft ? aircraftStatusLabel(selectedAircraft.status) : '等待运行数据' }}</em></header>
         <div><dl v-for="metric in selectedAircraftMonitorMetrics" :key="metric.code" :class="metric.tone" :title="metric.value"><dt>{{ metric.label }}</dt><dd>{{ metric.value }}</dd></dl></div>
         <div class="next-task-strip" v-if="selectedAircraft" :data-next-task-id="selectedAircraftNextTask?.scheduleItemId ?? ''" :data-selected-aircraft-model="selectedAircraft.modelCode ?? ''">
           <span>下一任务</span>
@@ -1338,4 +1338,23 @@ function dynamicScheduleModeLabel(value: string) {
 .runtime-map-actions { top: auto; right: auto; bottom: 111px; left: 14px; }.runtime-map-actions .el-button { min-height: 34px; padding: 0 10px; }
 .runtime-alert-deck { border-top-color: #fff; }.runtime-alert-deck > header { border-bottom-color: #fff; }.runtime-alert-list article { border-color: #fff; border-left: 3px solid #bd8429; }.runtime-alert-list article.error,.runtime-alert-list article.critical { border-left-color: #b4433d; }.runtime-alert-list article.resolved { border-left-color: #4c806a; }.runtime-event-strip { border-top-color: #fff; }
 @media (min-width: 861px) { .runtime-fleet-panel,.runtime-control-panel { grid-row: 2 / 4; }.runtime-map-panel,.runtime-map-panel.map-fullscreen { grid-template-rows: 91px minmax(0,1fr); }.runtime-aircraft-monitor { grid-template-rows: 58px 33px; }.runtime-aircraft-monitor > header { padding: 2px 6px; }.runtime-aircraft-monitor > div:not(.next-task-strip) { grid-template-rows: repeat(2,minmax(0,1fr)); align-items: stretch; }.runtime-aircraft-monitor dl { min-height: 0; display: grid; align-content: center; box-sizing: border-box; padding: 2px 4px; }.runtime-aircraft-monitor .next-task-strip { padding: 2px 6px; } }
+
+@media (max-width: 1080px) {
+  .logistics-runtime-workspace, .logistics-runtime-workspace.has-restart { grid-column: 2 / 4; grid-row: 2 / 4; grid-template-columns: 1fr; grid-template-rows: auto 440px 340px 250px 230px; overflow: auto; scroll-padding-top: 150px; }
+  .runtime-commandbar { grid-column: 1; grid-row: 1; }
+  .runtime-map-panel { grid-column: 1; grid-row: 2; }
+  .runtime-fleet-panel, .runtime-control-panel { grid-column: 1; grid-row: 3; border-left: 0; border-top: 1px solid #ccd7d2; }
+  .runtime-mission-table { grid-column: 1; grid-row: 4; overflow-x: auto; }
+  .runtime-alert-deck { grid-column: 1; grid-row: 5; }
+}
+@media (max-width: 760px) {
+  .logistics-runtime-workspace, .logistics-runtime-workspace.has-restart { grid-column: 1; grid-row: 3 / 5; grid-template-rows: auto 380px 330px 230px 220px; }
+}
+@media (max-width: 420px) {
+  .logistics-runtime-workspace, .logistics-runtime-workspace.has-restart { grid-template-rows: auto 320px 330px 220px 210px; }
+  .runtime-mobile-nav button { min-height: 38px; }
+  .runtime-aircraft-monitor > div:not(.next-task-strip) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .runtime-mission-head, .runtime-mission-body button { min-width: 500px; }
+}
+
 </style>

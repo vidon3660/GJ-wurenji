@@ -503,4 +503,56 @@ function formatTime(value: string | null) {
 .comparison-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; height: 100%; min-width: 0; min-height: 0; background: #d7dfdb; gap: 1px; }.comparison-editor-grid > section { display: grid; grid-template-rows: 34px minmax(0, 1fr); min-width: 0; min-height: 0; background: white; }.comparison-editor-grid section > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #d4ddd8; padding: 0 10px; }.comparison-editor-grid section > header strong { font-size: 11px; }.comparison-editor-grid section > header small { color: #71847c; font-size: 11px; }
 @media (max-width: 1080px) { .show-document-workspace { grid-template-columns: 210px minmax(0, 1fr); } .document-reference { display: none; } }
 @media (max-width: 760px) { .show-document-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-columns: 1fr; grid-template-rows: auto 680px; } .document-index { display: grid; grid-template-columns: repeat(3, 1fr); border-right: 0; } .document-index > header, .document-index > footer { display: none; } .document-index > button { grid-template-columns: 20px minmax(0, 1fr); min-height: 68px; } .document-index > button .el-icon, .document-index > button i { display: none; } .document-stage, .document-stage.teacher-view { display: block; max-width: 100%; overflow-x: hidden; overflow-y: auto; } .document-stage > * { box-sizing: border-box; min-width: 0; max-width: 100%; } .document-load-error { align-items: stretch; flex-direction: column; margin: 12px; }.document-load-error-full { margin: 12px; } .teacher-evidence-banner { grid-template-columns: 18px minmax(0, 1fr); padding: 8px 12px; } .teacher-evidence-banner span { grid-column: 1 / -1; padding-left: 26px; } .document-body { overflow: visible; padding: 16px 12px; } .document-paper-preview { min-height: 470px; padding: 42px 30px; } .version-compare-selectors,.version-evidence-grid,.comparison-editor-grid { grid-template-columns: minmax(0, 1fr); }.version-evidence-grid > article + article { border-top: 1px solid #d8e0dc; border-left: 0; }.document-version-comparison > footer { align-items: stretch; flex-direction: column; }.document-version-comparison > footer :deep(.el-button) { width: 100%; margin: 0; }.comparison-editor-grid { grid-template-rows: repeat(2, minmax(560px, 1fr)); height: auto; min-height: 1120px; }.comparison-editor-dialog :deep(.el-dialog__body) { overflow: auto; } .document-review-bar { grid-template-columns: minmax(0, 1fr) 104px; width: 100%; } .document-review-bar > * { min-width: 0; } .document-review-bar > :first-child { grid-column: 1 / -1; } .document-review-bar > :last-child { grid-column: 1 / -1; } .document-review-bar :deep(.el-input-number) { width: 100%; } .return-action, .return-action .el-button { width: 100%; } .onlyoffice-reference-layout.with-reference { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(420px,62%) minmax(0,38%); overflow: hidden; } .onlyoffice-reference-sidebar { border-top: 1px solid #d4ddd8; border-left: 0; } }
+
+
+/* Narrow screens keep the document index, editor and reference evidence usable. */
+@media (max-width: 1080px) {
+  .show-document-workspace {
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: auto;
+  }
+  .document-reference {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-height: 300px;
+    overflow: auto;
+    border-top: 1px solid #d4ddd8;
+    border-left: 0;
+  }
+}
+@media (max-width: 760px) {
+  .show-document-workspace {
+    display: flex;
+    grid-column: 1;
+    grid-row: 3 / 5;
+    min-height: 0;
+    overflow: auto;
+  }
+  .document-index { flex: 0 0 auto; }
+  .document-stage,
+  .document-stage.teacher-view {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 520px;
+    overflow: visible;
+  }
+  .document-reference {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (max-width: 420px) {
+  .document-index { overflow-x: auto; }
+  .document-index > button { min-width: 112px; }
+  .document-stage > header { align-items: flex-start; flex-direction: column; gap: 10px; padding: 12px; }
+  .document-command-row { width: 100%; flex-wrap: wrap; }
+  .document-command-row .el-button { flex: 1 1 120px; min-width: 0; }
+  .document-paper-preview { padding: 34px 20px; }
+  .document-paper-preview > strong { margin-top: 38px; font-size: 18px; }
+  .document-review-bar { gap: 6px; padding: 8px 10px; }
+}
+
 </style>
