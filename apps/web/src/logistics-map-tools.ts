@@ -26,6 +26,18 @@ export function logisticsNodeTypeVisible(
   return visibleNodeTypes.includes(type)
 }
 
+
+/** Returns true when a picked Cesium route entity belongs to the route being edited.
+ * Route entities have IDs such as `log-route:<routeId>:center:<segment>`.
+ * Keeping this predicate outside the component makes add-waypoint hit testing
+ * deterministic and prevents a route line click from being treated as a route
+ * selection while insertion mode is active.
+ */
+export function isSelectedLogisticsRouteEntity(entityId: string, selectedRouteId: string): boolean {
+  if (!entityId || !selectedRouteId) return false
+  return entityId.startsWith(`log-route:${selectedRouteId}:`)
+}
+
 export function logisticsRuntimeFocusCoordinates(
   routes: readonly LogisticsRuntimeRouteView[],
   aircraft: readonly LogisticsRuntimeAircraftView[],
