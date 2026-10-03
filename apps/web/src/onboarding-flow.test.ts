@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { OnboardingState } from "@wurenji/shared"
-import { clearOnboardingProgress, loadOnboardingMission, loadOnboardingStep, saveOnboardingMission, saveOnboardingStep } from "./onboarding-flow"
+import { clearOnboardingProgress, loadOnboardingMission, loadOnboardingStep, saveOnboardingMission, saveOnboardingStep, shouldShowOnboardingGuide } from "./onboarding-flow"
 
 function memoryStorage() {
   const values = new Map<string, string>()
@@ -12,8 +12,28 @@ function memoryStorage() {
 }
 
 const state: OnboardingState = { guideKey: "student-basics", version: 2, completed: false, skipped: false }
+const guideContext = { completed: false, hasMission: false, inWorkspace: false, isTeacher: false, studentProjectId: "project-1", deferred: false, deferredProjectId: null }
 
 describe("onboarding flow", () => {
+  it("starts a student guide only when a usable project is available", () => {
+    expect(shouldShowOnboardingGuide({ ...guideContext, studentProjectId: null })).toBe(false)
+    expect(shouldShowOnboardingGuide(guideContext)).toBe(true)
+    expect(shouldShowOnboardingGuide({ ...guideContext, isTeacher: true, studentProjectId: null })).toBe(true)
+  })
+
+  it("keeps periodic refresh quiet after the guide is deferred", () => {
+    const deferred = { ...guideContext, deferred: true, deferredProjectId: "project-1" }
+    expect(shouldShowOnboardingGuide(deferred)).toBe(false)
+    expect(shouldShowOnboardingGuide({ ...deferred, studentProjectId: "project-2" })).toBe(true)
+    expect(shouldShowOnboardingGuide({ ...deferred, isTeacher: true, studentProjectId: "project-2" })).toBe(false)
+  })
+
+  it("keeps a resumed workspace and an active mission free of automatic popups", () => {
+    expect(shouldShowOnboardingGuide({ ...guideContext, inWorkspace: true })).toBe(false)
+    expect(shouldShowOnboardingGuide({ ...guideContext, hasMission: true })).toBe(false)
+    expect(shouldShowOnboardingGuide({ ...guideContext, completed: true })).toBe(false)
+  })
+
   it("restores only a valid step for the current guide version", () => {
     const storage = memoryStorage()
     saveOnboardingStep(storage, "student-1", state, 2)
@@ -52,5 +72,11 @@ describe("onboarding flow", () => {
     saveOnboardingStep(storage, "teacher-2", state, 1)
     expect(loadOnboardingStep(storage, "teacher-1", state, 4)).toBe(2)
     expect(loadOnboardingStep(storage, "teacher-2", state, 4)).toBe(1)
+  })
+
+  it("normalizes a stale mission scene before it reaches the workspace", () => {
+    const storage = memoryStorage()
+    storage.setItem("wurenji:onboarding:student-1:student-basics:v2:mission", JSON.stringify({ action: "student-first-stage", sceneType: "OLD_SCENE" }))
+    expect(loadOnboardingMission(storage, "student-1", state)).toEqual({ action: "student-first-stage", sceneType: null })
   })
 })

@@ -82,7 +82,10 @@ button {
 
 .login-page {
   display: grid;
-  grid-template-columns: minmax(520px, 1.3fr) minmax(420px, 0.7fr);
+  /* Keep the base layout shrinkable. The mobile breakpoint below stacks the
+   * panes; fixed minimum columns here would still create a horizontal page
+   * overflow before that breakpoint is applied. */
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr);
   width: 100%;
   height: 100%;
   background: #f8faf9;
@@ -9896,8 +9899,16 @@ select:focus-visible,
   text-align: center;
 }
 
- .async-view-error {
+.async-view-error {
   color: #9a504a;
+}
+
+/* Element Plus dialogs often receive a desktop width from the component
+ * template. Constrain that width at the global boundary so a phone viewport
+ * never gets a horizontal page scrollbar, while the dialog body remains
+ * responsible for its own table/content scrolling. */
+.el-dialog {
+  max-width: calc(100vw - 24px);
 }
 
 /* Final cascade for the current platform surfaces. */

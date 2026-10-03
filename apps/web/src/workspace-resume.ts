@@ -20,13 +20,25 @@ export function parseWorkspaceResumeTarget(value: string | null): WorkspaceResum
 }
 
 export function loadWorkspaceResumeTarget(storage: Pick<Storage, "getItem">, userId: string): WorkspaceResumeTarget | null {
-  return parseWorkspaceResumeTarget(storage.getItem(workspaceResumeKey(userId)))
+  try {
+    return parseWorkspaceResumeTarget(storage.getItem(workspaceResumeKey(userId)))
+  } catch {
+    return null
+  }
 }
 
 export function saveWorkspaceResumeTarget(storage: Pick<Storage, "setItem">, userId: string, projectId: string): void {
-  storage.setItem(workspaceResumeKey(userId), JSON.stringify({ version: 1, kind: "V3", id: projectId } satisfies WorkspaceResumeTarget))
+  try {
+    storage.setItem(workspaceResumeKey(userId), JSON.stringify({ version: 1, kind: "V3", id: projectId } satisfies WorkspaceResumeTarget))
+  } catch {
+    // A browser storage restriction must not stop a student entering a project.
+  }
 }
 
 export function clearWorkspaceResumeTarget(storage: Pick<Storage, "removeItem">, userId: string): void {
-  storage.removeItem(workspaceResumeKey(userId))
+  try {
+    storage.removeItem(workspaceResumeKey(userId))
+  } catch {
+    // Leaving the workspace remains available when persistence is blocked.
+  }
 }
