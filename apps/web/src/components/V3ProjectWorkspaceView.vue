@@ -138,7 +138,13 @@ const stageUsesMap = computed(() => !(
   || flightEndWorkspaceReady.value
   || logisticsReadinessWorkspaceReady.value
 ))
-const sceneTitle = computed(() => project.value?.sceneType === "CITY_SHOW" ? "城市编队表演" : project.value?.sceneType === "CITY_LOGISTICS" ? "城市低空物流" : "垂起广域巡检")
+const sceneTitle = computed(() => {
+  if (project.value?.sceneType === "CITY_SHOW") return "城市编队表演"
+  if (project.value?.sceneType === "CITY_LOGISTICS") {
+    return selectedStage.value?.stageCode === "LOGISTICS_EMERGENCY_HANDLING" ? "城市应急救援" : "城市低空物流"
+  }
+  return "垂起广域巡检"
+})
 const currentSceneRoleProfile = computed(() => sceneRoleProfile(project.value?.sceneType ?? "CITY_SHOW"))
 const reviewSceneType = computed<"CITY_SHOW" | "CITY_LOGISTICS">(() => project.value?.sceneType === "CITY_LOGISTICS" ? "CITY_LOGISTICS" : "CITY_SHOW")
 const logisticsTask = computed(() => snapshot.value?.sceneType === "CITY_LOGISTICS"
