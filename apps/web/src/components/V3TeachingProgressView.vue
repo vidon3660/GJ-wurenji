@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
-import { ArrowRight, Bell, CircleCheck, Refresh, RefreshLeft, Search, Warning } from "@element-plus/icons-vue"
+import { ArrowRight, Bell, CircleCheck, Download, Refresh, RefreshLeft, Search, Warning } from "@element-plus/icons-vue"
 import { stageDefinitionsFor, type SceneType, type V3AlertSeverity, type V3RuntimeAlertView, type V3TeacherAlertFollowUpStatus, type V3TeacherProgressItem, type V3TeacherProgressPage, type V3TeachingOverview } from "@wurenji/shared"
 import { api } from "../api"
 import { countTeacherProgressFilters, filterStalledTeacherProgress, filterTeacherProgressAlerts, sortTeacherProgress, teacherAlertStatusSummary, teacherProgressMilestoneClass, teacherProgressStallLabel, type TeacherProgressSort } from "../teacher-progress"
@@ -12,6 +12,7 @@ import { teacherAssignmentDataLabel, teacherProgressTitle } from "../teacher-ass
 import { formatPlatformDate } from "../platform-date"
 import { runtimeAlertTiming } from "../runtime-alert-presentation"
 import { processTeacherAlertBatches, TeacherAlertBatchError } from "../teacher-alert-batching"
+import { teacherProgressCsv } from "../teacher-progress-export"
 
 const props = defineProps<{
   initialAlertState?: "" | "OPEN"
@@ -249,6 +250,21 @@ function clearProgressFilters() {
 
 function formatDate(value: string) {
   return formatPlatformDate(value)
+}
+
+function exportProgress() {
+  if (!filteredItems.value.length) {
+    ElMessage.info("当前筛选没有可导出的学生项目")
+    return
+  }
+  const csv = `\uFEFF${teacherProgressCsv(filteredItems.value, formatDate)}`
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }))
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = `学生进度-${new Date().toISOString().slice(0, 10)}.csv`
+  anchor.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success(`已导出 ${filteredItems.value.length} 条学生进度`)
 }
 
 function submissionLabel(value: string) {
@@ -530,7 +546,7 @@ async function createAssessmentRetake() {
   <div class="education-page progress-page" v-loading="loading">
     <header class="page-heading">
       <div><span>教学运行</span><h1>{{ alertState === 'OPEN' ? '告警队列' : '学生进度' }}</h1><small v-if="alertState === 'OPEN'" class="progress-focus-note">仅显示存在开放告警的学生项目</small></div>
-      <el-button :icon="Refresh" :loading="loading" :disabled="loading" @click="loadProgress">刷新</el-button>
+      <div class="progress-heading-actions"><el-button :icon="Download" :disabled="loading || !filteredItems.length" @click="exportProgress">导出当前结果</el-button><el-button :icon="Refresh" :loading="loading" :disabled="loading" @click="loadProgress">刷新</el-button></div>
     </header>
     <div v-if="errorText" class="progress-error" role="alert"><strong>学生进度同步失败</strong><span>{{ errorText }}，当前仍保留上一次成功加载的数据。</span><el-button text :icon="Refresh" :loading="loading" :disabled="loading" @click="loadProgress">重新加载</el-button></div>
 
@@ -609,7 +625,12 @@ async function createAssessmentRetake() {
 </template>
 
 <style scoped>
+.progress-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .progress-focus-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; grid-column: 1 / -1; }
 .progress-focus-filters button { border: 1px solid #cbd8d1; padding: 6px 9px; color: #526f62; font: inherit; font-size: 11px; background: #fff; cursor: pointer; }
 .progress-focus-filters button.active { border-color: #247354; color: #fff; background: #247354; }
+@media (max-width: 640px) {
+  .progress-heading-actions { width: 100%; justify-content: stretch; }
+  .progress-heading-actions :deep(.el-button) { flex: 1 1 0; }
+}
 </style>
