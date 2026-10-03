@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ApiError, api } from "./api"
+import { ApiError, api, apiBaseUrl } from "./api"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -14,7 +14,7 @@ describe("api", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     await expect(api<{ ok: boolean }>("/example", { method: "POST", body: JSON.stringify({ value: 1 }) })).resolves.toEqual({ ok: true })
-    expect(fetchMock).toHaveBeenCalledWith("/api/example", expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith(apiBaseUrl("/example"), expect.objectContaining({
       credentials: "include",
       method: "POST",
       headers: expect.any(Headers)

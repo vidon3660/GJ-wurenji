@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { openRuntimeStream } from "./runtime-stream"
+import { apiBaseUrl } from "./api"
 
 class FakeEventSource {
   static instances: FakeEventSource[] = []
@@ -65,7 +66,7 @@ describe("runtime stream client", () => {
       vi.fn()
     )
     const source = FakeEventSource.instances[0]!
-    expect(source.url).toBe("/api/v3/show-projects/project-1/runtime/stream")
+    expect(source.url).toBe(apiBaseUrl("/v3/show-projects/project-1/runtime/stream"))
     expect(source.options).toEqual({ withCredentials: true })
     source.open()
     source.emitSnapshot({ protocol: "wurenji-runtime-stream-v1", revision: 4, resumedFromRevision: 2, workspace: { status: "RUNNING" } })
