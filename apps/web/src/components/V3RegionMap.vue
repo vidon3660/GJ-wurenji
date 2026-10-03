@@ -251,6 +251,8 @@ async function reloadMapResources() {
 onMounted(async () => {
   if (!container.value) return
   window.addEventListener("keydown", handleKeyDown)
+  window.addEventListener("pointerup", handleGlobalPointerUp)
+  window.addEventListener("blur", handleGlobalPointerUp)
   viewer = createUnifiedCesiumViewer(container.value)
   scaleViewer.value = viewer
   viewerReady.value = true
@@ -284,6 +286,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown)
+  window.removeEventListener("pointerup", handleGlobalPointerUp)
+  window.removeEventListener("blur", handleGlobalPointerUp)
   viewerReady.value = false
   if (vtlOverlayFrame !== null) window.cancelAnimationFrame(vtlOverlayFrame)
   vtlOverlayFrame = null
@@ -631,12 +635,28 @@ function configureVtlInteractions() {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || !props.vtlZoneDrawMode) return
+  if (event.key !== "Escape") return
+  if (draggedEditorFeature || draggedVtlVertex || draggedVtlWaypoint) {
+    event.preventDefault()
+    handleGlobalPointerUp()
+    return
+  }
+  if (!props.vtlZoneDrawMode) return
   event.preventDefault()
   vtlDrawingPoints = []
   vtlCursorPoint = null
   renderVtlOverlay()
   emit("vtlZoneDrawCancel")
+}
+
+/**
+ * A drag can finish outside the Cesium canvas (for example on a side panel).
+ * Release the camera lock globally so editor and VTL waypoint/zone drags
+ * cannot leave the shared viewer in a permanently non-interactive state.
+ */
+function handleGlobalPointerUp() {
+  if (draggedEditorFeature) endEditorDrag()
+  if (draggedVtlVertex || draggedVtlWaypoint) endVtlDrag()
 }
 
 function handleVtlClick(position: Cartesian2) {
