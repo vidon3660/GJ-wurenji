@@ -33,6 +33,16 @@ export function buildingHeightMeters(raw: unknown, id: string): number {
   return 8 + (stableBuildingSeed(id) % 35)
 }
 
+/**
+ * Use an external building package only when it produced at least one
+ * polygon. A package URL can be present in a manifest while the file is
+ * missing (or temporarily empty); in that case the manifest footprints are
+ * the only usable spatial context and must remain visible.
+ */
+export function hasRenderableOfflineBuildingFeatures(featureCount: number): boolean {
+  return Number.isFinite(featureCount) && featureCount > 0
+}
+
 export function stableBuildingSeed(value: string): number {
   let hash = 2166136261
   for (let index = 0; index < value.length; index += 1) {
