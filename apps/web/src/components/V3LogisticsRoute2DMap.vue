@@ -86,7 +86,7 @@ const mapProps = computed(() => ({
       @edit-start="emit('editStart')"
       @data-state="emit('dataState', $event)"
     />
-    <div class="route-2d-map-note">Cesium 二维规划 · 基础边界只读<span v-if="props.addWaypointMode"> · 点击地图添加航点</span></div>
+    <div class="route-2d-map-note">二维地图<span v-if="props.addWaypointMode"> · 点击地图添加航点</span></div>
   </div>
 </template>
 
