@@ -6,7 +6,7 @@ import type { AssignmentDraftStatus, AuthUser, ClassroomSummary, OnboardingState
 import { api } from "../api"
 import { clearWorkspaceResumeTarget, loadWorkspaceResumeTarget, saveWorkspaceResumeTarget } from "../workspace-resume"
 import { teacherMetricNavigation } from "../teacher-progress"
-import { clearOnboardingMission, clearOnboardingProgress, getOnboardingStorage, loadOnboardingMission, saveOnboardingMission, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
+import { clearOnboardingMission, clearOnboardingProgress, getOnboardingStorage, loadOnboardingMission, saveOnboardingMission, shouldShowOnboardingGuide, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
 import EducationHomeView from "./EducationHomeView.vue"
 import { defineAsyncComponentWithLoading } from "../async-component"
 
@@ -35,6 +35,8 @@ const showGuide = ref(false)
 const onboardingMission = ref<OnboardingMission | null>(null)
 const onboardingMissionSaving = ref(false)
 const guidedSceneType = ref<SceneType | null>(null)
+const onboardingGuideDeferred = ref(false)
+const onboardingGuideDeferredProjectId = ref<string | null>(null)
 const onboardingStorage = getOnboardingStorage()
 const showAssignmentWizard = ref(false)
 const assignmentWizardKey = ref(0)
@@ -220,28 +222,38 @@ function openV3Project(projectId: string, alertId?: string) {
     ? { id: projectId, alertId }
     : { id: projectId }
   activeSection.value = "workspace"
-  saveWorkspaceResumeTarget(localStorage, props.user.id, projectId)
+  saveWorkspaceResumeTarget(onboardingStorage, props.user.id, projectId)
 }
 
 function syncOnboardingGuide() {
-  if (!onboarding.value || onboarding.value.completed || onboardingMission.value) {
+  if (!onboarding.value) {
     showGuide.value = false
     return
   }
-  // Students first need an assigned project. Showing an empty guide before
-  // that point creates a dead end and makes the home screen feel unfinished.
-  showGuide.value = isTeacher.value || Boolean(onboardingStudentProject.value)
+  showGuide.value = shouldShowOnboardingGuide({
+    completed: onboarding.value.completed,
+    hasMission: Boolean(onboardingMission.value),
+    inWorkspace: activeSection.value === "workspace",
+    isTeacher: isTeacher.value,
+    studentProjectId: onboardingStudentProject.value?.id ?? null,
+    deferred: onboardingGuideDeferred.value,
+    deferredProjectId: onboardingGuideDeferredProjectId.value
+  })
+  if (showGuide.value) {
+    onboardingGuideDeferred.value = false
+    onboardingGuideDeferredProjectId.value = null
+  }
 }
 
 async function restoreWorkspace() {
-  const target = loadWorkspaceResumeTarget(localStorage, props.user.id)
+  const target = loadWorkspaceResumeTarget(onboardingStorage, props.user.id)
   if (!target) return
   try {
     await api<StudentProjectView>(`/v3/projects/${target.id}/stages`)
     workspaceTarget.value = { id: target.id }
     activeSection.value = "workspace"
   } catch {
-    clearWorkspaceResumeTarget(localStorage, props.user.id)
+    clearWorkspaceResumeTarget(onboardingStorage, props.user.id)
   }
 }
 
@@ -264,31 +276,38 @@ async function assignmentPublished() {
 }
 
 async function leaveWorkspace() {
-  clearWorkspaceResumeTarget(localStorage, props.user.id)
+  clearWorkspaceResumeTarget(onboardingStorage, props.user.id)
   workspaceTarget.value = null
   activeSection.value = "home"
   await Promise.all([reloadEducationContext(), reloadV3()])
+  syncOnboardingGuide()
 }
 
 function finishGuide() {
   showGuide.value = false
   if (onboarding.value) onboarding.value.completed = true
+  if (onboarding.value) clearOnboardingProgress(onboardingStorage, props.user.id, onboarding.value)
   onboardingMission.value = null
 }
 
 function deferGuide() {
   showGuide.value = false
+  onboardingGuideDeferred.value = true
+  onboardingGuideDeferredProjectId.value = onboardingStudentProject.value?.id ?? null
 }
 
 function startGuideMission(action: OnboardingAction, sceneType: SceneType | null) {
   if (!onboarding.value) return
-  const mission = { action, sceneType }
-  onboardingMission.value = mission
-  guidedSceneType.value = sceneType
   if (action === "student-first-stage" && !onboardingStudentProject.value) {
+    // A student can open the guide while the task list is refreshing. Keep the
+    // guide visible until a real project exists instead of leaving a dead
+    // mission banner that cannot be resumed.
     ElMessage.info("当前还没有可进入的实训，教师发布任务后会在这里继续引导")
     return
   }
+  const mission = { action, sceneType }
+  onboardingMission.value = mission
+  guidedSceneType.value = sceneType
   saveOnboardingMission(onboardingStorage, props.user.id, onboarding.value, mission)
   showGuide.value = false
   resumeOnboardingMission()
@@ -344,6 +363,8 @@ function handleStudentOnboardingAction(action: "stage-started" | "simulation-ope
 }
 
 function replayGuide() {
+  onboardingGuideDeferred.value = false
+  onboardingGuideDeferredProjectId.value = null
   if (onboarding.value) clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
   onboardingMission.value = null
   if (!isTeacher.value && !onboardingStudentProject.value) {
