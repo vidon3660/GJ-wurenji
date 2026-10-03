@@ -6,7 +6,7 @@ import type { AssignmentDraftStatus, AuthUser, ClassroomSummary, OnboardingState
 import { api } from "../api"
 import { clearWorkspaceResumeTarget, loadWorkspaceResumeTarget, saveWorkspaceResumeTarget } from "../workspace-resume"
 import { teacherMetricNavigation } from "../teacher-progress"
-import { clearOnboardingMission, clearOnboardingProgress, getOnboardingStorage, loadOnboardingMission, saveOnboardingMission, shouldShowOnboardingGuide, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
+import { clearOnboardingDeferred, clearOnboardingMission, clearOnboardingProgress, getOnboardingStorage, loadOnboardingDeferred, loadOnboardingMission, saveOnboardingDeferred, saveOnboardingMission, shouldShowOnboardingGuide, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
 import EducationHomeView from "./EducationHomeView.vue"
 import { defineAsyncComponentWithLoading } from "../async-component"
 
@@ -98,7 +98,12 @@ onMounted(async () => {
   try {
     onboarding.value = await api<OnboardingState>("/v1/education/onboarding")
     if (onboarding.value.completed) clearOnboardingProgress(onboardingStorage, props.user.id, onboarding.value)
-    else onboardingMission.value = loadOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+    else {
+      onboardingMission.value = loadOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+      const deferredProjectId = loadOnboardingDeferred(onboardingStorage, props.user.id, onboarding.value)
+      onboardingGuideDeferred.value = Boolean(deferredProjectId)
+      onboardingGuideDeferredProjectId.value = deferredProjectId === "teacher" ? null : deferredProjectId
+    }
     guidedSceneType.value = onboardingMission.value?.sceneType ?? null
     syncOnboardingGuide()
   } catch {
@@ -294,6 +299,7 @@ function deferGuide() {
   showGuide.value = false
   onboardingGuideDeferred.value = true
   onboardingGuideDeferredProjectId.value = onboardingStudentProject.value?.id ?? null
+  if (onboarding.value) saveOnboardingDeferred(onboardingStorage, props.user.id, onboarding.value, onboardingGuideDeferredProjectId.value)
 }
 
 function startGuideMission(action: OnboardingAction, sceneType: SceneType | null) {
@@ -307,8 +313,11 @@ function startGuideMission(action: OnboardingAction, sceneType: SceneType | null
   }
   const mission = { action, sceneType }
   onboardingMission.value = mission
+  onboardingGuideDeferred.value = false
+  onboardingGuideDeferredProjectId.value = null
   guidedSceneType.value = sceneType
   saveOnboardingMission(onboardingStorage, props.user.id, onboarding.value, mission)
+  clearOnboardingDeferred(onboardingStorage, props.user.id, onboarding.value)
   showGuide.value = false
   resumeOnboardingMission()
 }
@@ -365,7 +374,10 @@ function handleStudentOnboardingAction(action: "stage-started" | "simulation-ope
 function replayGuide() {
   onboardingGuideDeferred.value = false
   onboardingGuideDeferredProjectId.value = null
-  if (onboarding.value) clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+  if (onboarding.value) {
+    clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+    clearOnboardingDeferred(onboardingStorage, props.user.id, onboarding.value)
+  }
   onboardingMission.value = null
   if (!isTeacher.value && !onboardingStudentProject.value) {
     showGuide.value = false
