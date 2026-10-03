@@ -1,0 +1,6 @@
+[
+  { "id": "replace-main-west", "code": "MAIN-WEST", "title": "西侧主起降点", "type": "MAIN", "position": { "longitude": 113.884, "latitude": 22.613 }, "elevationMeters": 38, "status": "AVAILABLE", "relatedAlternateSiteIds": ["replace-alt-west", "replace-alt-east"] },
+  { "id": "replace-main-east", "code": "MAIN-EAST", "title": "东侧主起降点", "type": "MAIN", "position": { "longitude": 113.936, "latitude": 22.614 }, "elevationMeters": 42, "status": "AVAILABLE", "relatedAlternateSiteIds": ["replace-alt-east", "replace-alt-west"] },
+  { "id": "replace-alt-west", "code": "ALT-WEST", "title": "西北备降点", "type": "ALTERNATE", "position": { "longitude": 113.884, "latitude": 22.665 }, "elevationMeters": 55, "status": "AVAILABLE", "relatedAlternateSiteIds": [] },
+  { "id": "replace-alt-east", "code": "ALT-EAST", "title": "东北备降点", "type": "ALTERNATE", "position": { "longitude": 113.936, "latitude": 22.665 }, "elevationMeters": 61, "status": "AVAILABLE", "relatedAlternateSiteIds": [] }
+]

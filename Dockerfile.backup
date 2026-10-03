@@ -1,0 +1,19 @@
+FROM node:24-bookworm-slim AS dependencies
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/simulation/package.json ./packages/simulation/package.json
+RUN npm ci --omit=dev
+COPY scripts ./scripts
+
+FROM postgres:17-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
+WORKDIR /app
+ARG PLATFORM_VERSION="0.1.0"
+ENV PLATFORM_VERSION=$PLATFORM_VERSION
+COPY --from=dependencies /usr/local/bin/node /usr/local/bin/node
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/scripts ./scripts
+ENTRYPOINT ["node", "scripts/backup.mjs"]
+CMD ["help"]

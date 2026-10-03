@@ -1,0 +1,9 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    { "code": "STAGE_GATE", "title": "阶段门禁", "enabled": true },
+    { "code": "SPATIAL_SAFETY", "title": "空间安全", "enabled": true },
+    { "code": "RUNTIME_RESPONSE", "title": "运行告警处置", "enabled": true },
+    { "code": "EVALUATION_METRICS", "title": "客观指标评价", "enabled": true }
+  ]
+}

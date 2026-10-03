@@ -1,0 +1,22 @@
+{
+  "packageType": "EVENT",
+  "name": "V3 城市物流事件",
+  "version": "1.0.0",
+  "schemaVersion": 1,
+  "minimumPlatformVersion": "0.1.0",
+  "keyId": "local-teaching-v3",
+  "content": {
+    "sceneType": "CITY_LOGISTICS",
+    "events": [
+      { "code": "WEATHER_CHANGE", "title": "局部气象条件恶化", "category": "WEATHER_ENVIRONMENT", "severity": "WARNING", "recommendedActions": ["REDUCE_SPEED", "HOLD_POSITION", "PAUSE_ROUTE"] },
+      { "code": "POSITIONING_DEGRADED", "title": "定位导航质量下降", "category": "POSITIONING_NAVIGATION", "severity": "ERROR", "recommendedActions": ["HOLD_POSITION", "PROCEED_TO_WAITING_POINT", "RETURN_AIRCRAFT"] },
+      { "code": "COMMUNICATION_LOSS", "title": "通信链路异常", "category": "COMMUNICATION_LINK", "severity": "ERROR", "recommendedActions": ["CONTINUE_MONITORING", "RETURN_AIRCRAFT", "DIVERT_AIRCRAFT"] },
+      { "code": "AIRCRAFT_FAULT", "title": "无人机设备故障", "category": "AIRCRAFT_DEVICE", "severity": "ERROR", "recommendedActions": ["RETURN_AIRCRAFT", "DIVERT_AIRCRAFT", "EMERGENCY_LAND_AIRCRAFT"] },
+      { "code": "NODE_UNAVAILABLE", "title": "配送节点暂不可用", "category": "ROUTE_OPERATION", "severity": "WARNING", "recommendedActions": ["HOLD_POSITION", "REASSIGN_ORDER", "DELAY_TASK"] },
+      { "code": "DYNAMIC_ORDER", "title": "动态新增订单", "category": "ORDER_TASK_CHANGE", "severity": "INFO", "recommendedActions": ["REASSIGN_ORDER", "CHANGE_PRIORITY"] }
+    ]
+  },
+  "files": [
+    { "path": "payload/events.json", "source": "payload/events.json", "role": "EVENT_DEFINITIONS", "mimeType": "application/json" }
+  ]
+}

@@ -1,0 +1,7 @@
+FROM wurenji-platform-h3-review-frozen-fields:base-e354d21
+WORKDIR /app
+RUN rm -rf /app/apps/server/dist /app/apps/web/dist /app/packages/shared/dist /app/packages/simulation/dist
+COPY apps/server/dist ./apps/server/dist
+COPY apps/web/dist ./apps/web/dist
+COPY packages/shared/dist ./packages/shared/dist
+COPY packages/simulation/dist ./packages/simulation/dist

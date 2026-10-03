@@ -1,0 +1,15 @@
+services:
+  minio:
+    profiles: ["disabled"]
+  app:
+    depends_on: !override
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      V3_FILE_STORAGE_PROVIDER: LOCAL
+  migrate:
+    depends_on: !override
+      db:
+        condition: service_healthy

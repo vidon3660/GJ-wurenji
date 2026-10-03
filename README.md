@@ -7,6 +7,7 @@
 需要 Docker Desktop。Apple Silicon 会通过 Docker Desktop 兼容模式运行官方 PostGIS 镜像。
 
 ```bash
+npm run setup                 # 首次执行：生成本地 .env，不覆盖已有配置
 docker compose up -d --build
 ```
 
@@ -29,9 +30,9 @@ http://localhost:3000
 
 | 角色 | 账号 | 密码 |
 |---|---|---|
-| 教师 | `teacher@demo.local` | 本地 seed 配置 |
-| 学生 | `student@demo.local` | 本地 seed 配置 |
-| 学生 2 | `student2@demo.local` | 本地 seed 配置 |
+| 教师 | `teacher@demo.local` | `.env` 中的 `DEMO_TEACHER_PASSWORD` |
+| 学生 | `student@demo.local` | `.env` 中的 `DEMO_STUDENT_PASSWORD` |
+| 学生 2 | `student2@demo.local` | `.env` 中的 `DEMO_STUDENT2_PASSWORD` |
 
 PostGIS 默认映射到宿主机 `55432`，避免与本机已有的 PostgreSQL `5432` 冲突。可通过 `POSTGRES_PORT` 修改。
 
@@ -41,7 +42,8 @@ PostGIS 默认映射到宿主机 `55432`，避免与本机已有的 PostgreSQL `
 - 教师配置无人机、边界、起降点、任务点、障碍物、禁飞区、风雨和安全规则。
 - 场景检查、发布版本和学生提交进度查看。
 - 学生编组、任务分配、航点创建，以及高度、速度、起飞时间配置。
-- Cesium 单 Viewer 2D/3D 切换，航线与仿真轨迹回放。
+- 二维地图负责点位、区域、航线规划；点击对象可定位并高亮，图层开关与对象选择在二维/三维间保持一致。
+- Cesium 单 Viewer 2D/3D 切换，三维用于地形、建筑高度和运行态势观察，航线与仿真轨迹回放。
 - Worker Thread 固定 200 ms 步长仿真，最多 50 架无人机。
 - PostgreSQL Outbox、租约、重试和独立 Worker 进程，已接入表演最终报告自动生成。
 - 任务完成、间距、禁飞区、障碍物、边界、超时、航程、载重和性能限制检查。
@@ -50,11 +52,14 @@ PostGIS 默认映射到宿主机 `55432`，避免与本机已有的 PostgreSQL `
 ## 本地开发
 
 ```bash
-cp .env.example .env
+npm run setup                 # 已有 .env 时保持不变
 docker compose up -d db
 npm install
+npm run dev:prepare       # 数据库已启动后执行迁移和共享包构建
 npm run dev
 ```
+
+`npm run setup` 只在 `.env` 不存在时生成本地随机数据库、对象存储、JWT 和演示账号密码；命令不会打印任何密码，也不会覆盖已有 `.env`。首次开发启动建议使用 `npm run dev:prepare` 完成环境初始化、共享包构建和迁移，然后运行 `npm run dev`。
 
 开发地址为 `http://localhost:5173`，API 为 `http://localhost:3000/api`。`.env.example` 已配置本机数据库端口 `55432`。
 

@@ -1,0 +1,45 @@
+{
+  "packageType": "REPORT",
+  "name": "V3 统一教学评价报告",
+  "version": "2.1.0",
+  "schemaVersion": 1,
+  "minimumPlatformVersion": "0.1.0",
+  "keyId": "local-teaching-v3",
+  "content": {
+    "outputs": ["SINGLE_DOCX", "SINGLE_PDF"],
+    "include": ["planningMap", "flightTimeline", "objectiveMetrics", "teacherRubric", "eventResponse"],
+    "rubrics": [
+      {
+        "sceneType": "CITY_SHOW",
+        "version": "1.1.0",
+        "title": "城市无人机编队表演综合评价量表",
+        "sourceReferences": ["TEA-024", "需求规格说明书 12.2", "需求规格说明书 13.2", "需求规格说明书 13.3"],
+        "items": [
+          { "code": "AREA_PLANNING", "label": "区域规划", "maxScore": 15, "sourceReferences": ["TEA-024 区域规划"] },
+          { "code": "FLIGHT_APPLICATION", "label": "申报文件内容", "maxScore": 15, "sourceReferences": ["TEA-024 文件内容"] },
+          { "code": "PREFLIGHT_REPORTING", "label": "飞前判断与动态报备", "maxScore": 15, "sourceReferences": ["TEA-024 飞前判断"] },
+          { "code": "RISK_DECISION", "label": "运行风险识别与决策", "maxScore": 25, "sourceReferences": ["TEA-024 运行处置"] },
+          { "code": "PROCEDURE_RESULT", "label": "运行处置流程与结果", "maxScore": 15, "sourceReferences": ["TEA-024 运行处置"] },
+          { "code": "REVIEW_QUALITY", "label": "飞后复盘质量", "maxScore": 15, "sourceReferences": ["需求规格说明书 13.3"] }
+        ]
+      },
+      {
+        "sceneType": "CITY_LOGISTICS",
+        "version": "1.0.0",
+        "title": "城市低空物流综合评价量表",
+        "sourceReferences": ["TEA-028", "需求规格说明书 12.1", "需求规格说明书 12.2", "需求规格说明书 13.2", "需求规格说明书 13.3"],
+        "items": [
+          { "code": "REGION_ROUTE_PLANNING", "label": "区域与航线规划", "maxScore": 20, "sourceReferences": ["TEA-028 区域与航线规划"] },
+          { "code": "ROUTE_VALIDATION", "label": "航线验证与风险识别", "maxScore": 15, "sourceReferences": ["需求规格说明书 12.1"] },
+          { "code": "ORDER_SCHEDULING", "label": "订单与机群调度", "maxScore": 20, "sourceReferences": ["TEA-028 订单与调度"] },
+          { "code": "RUNTIME_MONITORING", "label": "运行监控与时序管理", "maxScore": 15, "sourceReferences": ["需求规格说明书 12.2"] },
+          { "code": "EMERGENCY_RESOLUTION", "label": "应急处置与动态重调度", "maxScore": 20, "sourceReferences": ["需求规格说明书 13.2"] },
+          { "code": "REVIEW_QUALITY", "label": "复盘质量与改进建议", "maxScore": 10, "sourceReferences": ["需求规格说明书 13.3"] }
+        ]
+      }
+    ]
+  },
+  "files": [
+    { "path": "payload/report.json", "source": "payload/report.json", "role": "REPORT_DEFINITION", "mimeType": "application/json" }
+  ]
+}

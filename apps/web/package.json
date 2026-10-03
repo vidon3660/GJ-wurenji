@@ -1,0 +1,33 @@
+{
+  "name": "@wurenji/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vue-tsc -b && vite build",
+    "dev": "vite --host 0.0.0.0",
+    "typecheck": "vue-tsc -b",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "2.3.2",
+    "@types/papaparse": "^5.5.2",
+    "@wurenji/shared": "0.1.0",
+    "@wurenji/simulation": "0.1.0",
+    "cesium": "1.143.0",
+    "element-plus": "2.14.3",
+    "papaparse": "^5.5.4",
+    "pinia": "4.0.2",
+    "vue": "3.5.40"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/test-utils": "2.4.6",
+    "jsdom": "27.4.0",
+    "typescript": "5.9.3",
+    "vite": "7.2.4",
+    "vite-plugin-static-copy": "3.1.4",
+    "vitest": "4.1.10",
+    "vue-tsc": "3.1.8"
+  }
+}

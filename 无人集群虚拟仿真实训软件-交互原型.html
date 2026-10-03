@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>无人集群虚拟仿真实训软件 - C/S 交互原型</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17201c;
+      --muted: #65716b;
+      --line: #d7ded9;
+      --line-strong: #bcc7c0;
+      --surface: #ffffff;
+      --panel: #f7f9f8;
+      --canvas: #e8ede9;
+      --header: #202622;
+      --header-soft: #323a35;
+      --green: #147b58;
+      --green-dark: #0d6044;
+      --green-pale: #e5f2ec;
+      --blue: #2f6fa9;
+      --amber: #b9700c;
+      --amber-pale: #fff4dc;
+      --red: #c74640;
+      --red-pale: #fff0ed;
+      font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--canvas); color: var(--ink); }
+    button, input, select { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    .hidden { display: none !important; }
+
+    .app { display: grid; grid-template-rows: 58px minmax(0, 1fr) 27px; width: 100%; height: 100%; }
+    .titlebar {
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+      padding: 0 14px;
+      color: #f4f7f5;
+      background: var(--header);
+      border-bottom: 1px solid #3a433e;
+    }
+    .brand { display: flex; align-items: center; min-width: 0; gap: 10px; }
+    .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #5b6961; border-radius: 5px; color: #70d4ae; font-weight: 800; }
+    .brand-copy { min-width: 0; }
+    .brand-copy strong { display: block; font-size: 14px; }
+    .brand-copy span { display: block; overflow: hidden; color: #9eaaa3; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .document-title { min-width: 0; }
+    .document-title strong { display: block; overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    .document-title span { color: #9eaaa3; font-size: 10px; }
+    .title-actions { display: flex; align-items: center; gap: 8px; }
+
+    .segmented { display: inline-flex; padding: 2px; border: 1px solid #59645e; border-radius: 5px; background: #2c332f; }
+    .segmented button { height: 28px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: #aeb8b2; font-size: 11px; }
+    .segmented button.active { background: #4b5650; color: white; }
+    .avatar { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #68746d; border-radius: 50%; background: #3b4540; color: white; font-size: 11px; }
+
+    .workspace { display: grid; grid-template-columns: 52px 268px minmax(420px, 1fr) 304px; min-height: 0; }
+    .rail { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 9px 6px; background: #29302c; border-right: 1px solid #3d4741; }
+    .rail-button { display: grid; width: 40px; height: 40px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #aeb8b2; font-size: 15px; }
+    .rail-button.active { background: #3c4640; color: #79d7b2; }
+    .rail-spacer { flex: 1; }
+
+    .panel { min-width: 0; background: var(--panel); }
+    .left-panel { overflow: hidden; border-right: 1px solid var(--line-strong); }
+    .right-panel { overflow: auto; border-left: 1px solid var(--line-strong); }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 13px; background: var(--surface); border-bottom: 1px solid var(--line); }
+    .panel-head strong { font-size: 13px; }
+    .panel-head span { color: var(--muted); font-size: 10px; }
+    .tabs { display: grid; grid-template-columns: repeat(3, 1fr); height: 38px; background: var(--surface); border-bottom: 1px solid var(--line); }
+    .tab { position: relative; border: 0; background: transparent; color: var(--muted); font-size: 11px; }
+    .tab.active { color: var(--green-dark); font-weight: 700; }
+    .tab.active::after { position: absolute; right: 12px; bottom: 0; left: 12px; height: 2px; background: var(--green); content: ""; }
+
+    .panel-scroll { height: calc(100% - 84px); overflow: auto; }
+    .section { padding: 12px; border-bottom: 1px solid var(--line); }
+    .section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .tree-row, .task-row, .drone-row, .risk-row {
+      display: grid;
+      width: 100%;
+      min-height: 34px;
+      align-items: center;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      text-align: left;
+    }
+    .tree-row { grid-template-columns: 22px minmax(0, 1fr) auto; padding: 0 7px; font-size: 11px; }
+    .tree-row:hover, .tree-row.selected { background: #e8eeea; }
+    .tree-row.selected { box-shadow: inset 2px 0 var(--green); color: var(--green-dark); }
+    .tree-icon { display: grid; width: 17px; height: 17px; place-items: center; border-radius: 3px; background: #dce5df; color: #4c5b53; font-size: 9px; font-weight: 800; }
+    .tree-count { color: var(--muted); font-size: 10px; }
+    .tree-children { margin-left: 15px; padding-left: 8px; border-left: 1px solid var(--line); }
+
+    .scene-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .metric { min-height: 54px; padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+    .metric strong { display: block; font-size: 16px; }
+    .metric span { color: var(--muted); font-size: 9px; }
+
+    .stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #d9e0db; }
+    #sceneCanvas { display: block; width: 100%; height: 100%; }
+    .stage-toolbar { position: absolute; top: 12px; left: 50%; display: flex; gap: 4px; padding: 4px; transform: translateX(-50%); border: 1px solid #c5cec8; border-radius: 5px; background: rgb(255 255 255 / 94%); box-shadow: 0 8px 22px rgb(24 33 28 / 12%); }
+    .tool-button { min-width: 34px; height: 32px; padding: 0 9px; border: 0; border-radius: 3px; background: transparent; font-size: 11px; }
+    .tool-button:hover, .tool-button.active { background: var(--green-pale); color: var(--green-dark); }
+    .stage-badge { position: absolute; top: 12px; left: 12px; padding: 7px 9px; border: 1px solid #bdc8c1; border-radius: 4px; background: rgb(255 255 255 / 94%); font-size: 10px; }
+    .legend { position: absolute; right: 12px; bottom: 84px; display: flex; gap: 12px; padding: 7px 9px; border: 1px solid #bdc8c1; border-radius: 4px; background: rgb(255 255 255 / 94%); color: var(--muted); font-size: 9px; }
+    .legend i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 50%; }
+    .legend .route { background: var(--green); }
+    .legend .risk { background: var(--red); }
+    .legend .zone { border-radius: 2px; background: #e39a94; }
+
+    .timeline { position: absolute; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 70px; padding: 0 13px; border-top: 1px solid var(--line-strong); background: rgb(250 252 251 / 97%); }
+    .playback { display: flex; align-items: center; gap: 4px; }
+    .play-button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--green); color: white; font-size: 12px; }
+    .secondary-play { width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); }
+    .time-track { position: relative; height: 5px; border-radius: 2px; background: #d5dcd7; }
+    .time-progress { width: 0%; height: 100%; border-radius: 2px; background: var(--green); }
+    .time-marker { position: absolute; top: -4px; width: 3px; height: 13px; background: var(--red); }
+    .time-labels { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 9px; }
+    .time-info { min-width: 96px; text-align: right; }
+    .time-info strong { display: block; font-size: 12px; }
+    .time-info span { color: var(--muted); font-size: 9px; }
+
+    .field { margin-bottom: 11px; }
+    .field label { display: flex; justify-content: space-between; margin-bottom: 5px; color: var(--muted); font-size: 10px; }
+    .field input, .field select { width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: white; color: var(--ink); font-size: 11px; }
+    .field input[type="range"] { height: 20px; padding: 0; border: 0; background: transparent; accent-color: var(--green); }
+    .two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .choice { display: grid; grid-template-columns: repeat(4, 1fr); padding: 2px; border: 1px solid var(--line); border-radius: 4px; background: #edf1ee; }
+    .choice button { height: 28px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 10px; }
+    .choice button.active { background: white; color: var(--green-dark); box-shadow: 0 1px 3px rgb(20 30 24 / 12%); font-weight: 700; }
+
+    .button { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; padding: 0 11px; border: 1px solid transparent; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .button.primary { background: var(--green); color: white; }
+    .button.primary:hover { background: var(--green-dark); }
+    .button.secondary { border-color: var(--line-strong); background: white; }
+    .button.dark { border-color: #59645e; background: var(--header-soft); color: white; }
+    .button.full { width: 100%; }
+    .button-row { display: flex; gap: 7px; }
+    .button-row .button { flex: 1; }
+
+    .student-only { display: none; }
+    body.student-mode .student-only { display: block; }
+    body.student-mode .timeline.student-only { display: grid; }
+    body.student-mode .teacher-only { display: none; }
+    body.student-mode .workspace { grid-template-columns: 52px 280px minmax(420px, 1fr) 314px; }
+
+    .task-row, .drone-row { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 5px; padding: 6px; margin-bottom: 3px; }
+    .task-row:hover, .drone-row:hover, .drone-row.selected { background: #e7ede9; }
+    .status-dot { width: 8px; height: 8px; margin-left: 5px; border-radius: 50%; background: var(--green); }
+    .status-dot.warn { background: var(--amber); }
+    .task-copy strong, .drone-copy strong { display: block; font-size: 11px; }
+    .task-copy span, .drone-copy span { color: var(--muted); font-size: 9px; }
+    .tag { padding: 3px 5px; border-radius: 3px; background: #e2e8e4; color: var(--muted); font-size: 9px; }
+    .tag.warn { background: var(--amber-pale); color: var(--amber); }
+
+    .result-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+    .result-summary .metric { min-height: 49px; padding: 7px; }
+    .risk-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; min-height: 55px; padding: 7px; margin-bottom: 5px; border: 1px solid var(--line); background: white; }
+    .risk-row:hover, .risk-row.selected { border-color: #e2a39f; background: var(--red-pale); }
+    .risk-bar { align-self: stretch; border-radius: 2px; background: var(--red); }
+    .risk-bar.warn { background: var(--amber); }
+    .risk-copy strong { display: block; margin-bottom: 3px; font-size: 10px; }
+    .risk-copy span { color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .risk-time { color: var(--muted); font-size: 9px; }
+
+    .statusbar { display: flex; align-items: center; gap: 18px; padding: 0 10px; border-top: 1px solid var(--line-strong); background: #f7f9f8; color: var(--muted); font-size: 9px; }
+    .statusbar .ok::before { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--green); content: ""; }
+    .statusbar .right { margin-left: auto; }
+
+    .toast-stack { position: fixed; z-index: 50; top: 70px; right: 14px; display: grid; gap: 7px; }
+    .toast { min-width: 260px; padding: 10px 12px; border: 1px solid #b8c5bd; border-radius: 5px; background: white; box-shadow: 0 10px 28px rgb(20 28 23 / 17%); font-size: 11px; }
+    .toast.error { border-color: #e0aaa6; color: #8f302c; }
+
+    @media (max-width: 1100px) {
+      .workspace, body.student-mode .workspace { grid-template-columns: 48px 230px minmax(360px, 1fr) 270px; }
+      .titlebar { grid-template-columns: 260px minmax(0, 1fr) auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <div class="brand">
+        <div class="brand-mark">YZ</div>
+        <div class="brand-copy"><strong>云阵无人集群虚拟仿真实训</strong><span>C++ / Qt / osgEarth 客户端原型</span></div>
+      </div>
+      <div class="document-title">
+        <strong id="documentTitle">城市物流配送实验 · 场景草稿</strong>
+        <span id="documentState">自动保存于 14:32 · 场景版本未发布</span>
+      </div>
+      <div class="title-actions">
+        <div class="segmented" aria-label="角色模式">
+          <button class="active" data-role="teacher">教师配置</button>
+          <button data-role="student">学生实训</button>
+        </div>
+        <button class="button dark" id="checkButton">场景检查</button>
+        <button class="button primary" id="primaryAction">发布实训</button>
+        <div class="avatar">陈</div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <nav class="rail" aria-label="主导航">
+        <button class="rail-button" title="教学首页">首</button>
+        <button class="rail-button active" title="实训工作台">训</button>
+        <button class="rail-button" title="课程与班级">课</button>
+        <button class="rail-button" title="成果与成绩">果</button>
+        <div class="rail-spacer"></div>
+        <button class="rail-button" title="系统设置">设</button>
+      </nav>
+
+      <aside class="panel left-panel">
+        <div class="panel-head"><strong id="leftTitle">场景配置</strong><span id="leftMeta">12 架无人机</span></div>
+
+        <div class="teacher-only">
+          <div class="tabs">
+            <button class="tab active">对象</button><button class="tab">资源</button><button class="tab">环境</button>
+          </div>
+          <div class="panel-scroll">
+            <section class="section">
+              <div class="section-title"><span>场景类型</span></div>
+              <div class="choice" id="sceneChoice">
+                <button data-scene="show">表演</button><button class="active" data-scene="logistics">物流</button><button disabled>救援</button><button disabled>扩展</button>
+              </div>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>场景对象</span><span>14</span></div>
+              <button class="tree-row"><span class="tree-icon">界</span><span>城市作业边界</span><span class="tree-count">1</span></button>
+              <button class="tree-row"><span class="tree-icon">起</span><span>起降设施</span><span class="tree-count">2</span></button>
+              <div class="tree-children">
+                <button class="tree-row"><span class="tree-icon">A</span><span>配送中心 A</span></button>
+                <button class="tree-row"><span class="tree-icon">B</span><span>备降点 B</span></button>
+              </div>
+              <button class="tree-row"><span class="tree-icon">任</span><span id="taskGroupLabel">配送任务</span><span class="tree-count" id="taskCount">8</span></button>
+              <div class="tree-children">
+                <button class="tree-row selected"><span class="tree-icon">D</span><span id="selectedObjectLabel">配送点 D-03</span></button>
+                <button class="tree-row"><span class="tree-icon">D</span><span>配送点 D-04</span></button>
+              </div>
+              <button class="tree-row"><span class="tree-icon">禁</span><span>禁飞区</span><span class="tree-count">1</span></button>
+              <button class="tree-row"><span class="tree-icon">障</span><span>城市障碍物</span><span class="tree-count">3</span></button>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>场景概况</span></div>
+              <div class="scene-summary">
+                <div class="metric"><strong>12</strong><span>无人机</span></div>
+                <div class="metric"><strong id="summaryTaskCount">8</strong><span id="summaryTaskLabel">配送订单</span></div>
+                <div class="metric"><strong>1</strong><span>禁飞区</span></div>
+                <div class="metric"><strong>03</strong><span>城市障碍物</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="student-only">
+          <div class="tabs">
+            <button class="tab active">无人机</button><button class="tab">任务</button><button class="tab">版本</button>
+          </div>
+          <div class="panel-scroll">
+            <section class="section">
+              <div class="section-title"><span>编组 A</span><span>6 架</span></div>
+              <button class="drone-row selected" data-drone="0"><span class="status-dot"></span><span class="drone-copy"><strong>无人机 U-01</strong><span>订单 O-03 · 航程 5.4 km</span></span><span class="tag">已分配</span></button>
+              <button class="drone-row" data-drone="1"><span class="status-dot"></span><span class="drone-copy"><strong>无人机 U-02</strong><span>订单 O-04 · 航程 6.8 km</span></span><span class="tag">已分配</span></button>
+              <button class="drone-row" data-drone="2"><span class="status-dot warn"></span><span class="drone-copy"><strong>无人机 U-03</strong><span>订单 O-08 · 余量 8%</span></span><span class="tag warn">预警</span></button>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>编组 B</span><span>6 架</span></div>
+              <button class="drone-row" data-drone="3"><span class="status-dot"></span><span class="drone-copy"><strong>无人机 U-07</strong><span>订单 O-02 · 航程 4.7 km</span></span><span class="tag">已分配</span></button>
+              <button class="drone-row" data-drone="4"><span class="status-dot"></span><span class="drone-copy"><strong>无人机 U-08</strong><span>订单 O-06 · 航程 7.1 km</span></span><span class="tag">已分配</span></button>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>任务覆盖</span><span>7/8</span></div>
+              <button class="task-row"><span class="status-dot warn"></span><span class="task-copy"><strong id="unassignedTask">订单 O-08 · D-03</strong><span>4.5 kg · 截止 06:00</span></span><span class="tag warn">未分配</span></button>
+            </section>
+          </div>
+        </div>
+      </aside>
+
+      <section class="stage">
+        <canvas id="sceneCanvas"></canvas>
+        <div class="stage-badge"><strong id="stageMode">教师场景编辑</strong> · WGS84 / ENU</div>
+        <div class="stage-toolbar">
+          <button class="tool-button active">选择</button>
+          <button class="tool-button teacher-only">起飞点</button>
+          <button class="tool-button" id="pointTool">配送点</button>
+          <button class="tool-button teacher-only">障碍物</button>
+          <button class="tool-button teacher-only">禁飞区</button>
+          <button class="tool-button student-only">航点</button>
+          <button class="tool-button student-only">航线</button>
+          <button class="tool-button">测距</button>
+          <button class="tool-button">3D</button>
+        </div>
+        <div class="legend"><span><i class="route"></i>规划航线</span><span><i class="risk"></i>问题位置</span><span><i class="zone"></i>禁飞区</span></div>
+
+        <div class="timeline student-only">
+          <div class="playback">
+            <button class="secondary-play" id="resetButton">|&lt;</button>
+            <button class="play-button" id="playButton">▶</button>
+            <button class="secondary-play" id="stepButton">&gt;</button>
+          </div>
+          <div>
+            <div class="time-track"><div class="time-progress" id="timeProgress"></div><i class="time-marker" style="left:34%"></i><i class="time-marker" style="left:67%"></i></div>
+            <div class="time-labels"><span>00:00</span><span>02:00</span><span>04:00</span><span>06:00</span><span>08:20</span></div>
+          </div>
+          <div class="time-info"><strong id="timeText">00:00 / 08:20</strong><span id="playState">方案设计模式</span></div>
+        </div>
+      </section>
+
+      <aside class="panel right-panel">
+        <div class="panel-head"><strong id="rightTitle">对象属性</strong><span id="rightMeta">教师可编辑</span></div>
+
+        <div class="teacher-only">
+          <div class="tabs"><button class="tab active">参数</button><button class="tab">环境</button><button class="tab">规则</button></div>
+          <div class="panel-scroll">
+            <section class="section">
+              <div class="section-title"><span id="propertyObjectTitle">配送点 D-03</span><span>任务对象</span></div>
+              <div class="field"><label><span>名称</span></label><input value="配送点 D-03" /></div>
+              <div class="two-fields">
+                <div class="field"><label><span>订单载荷</span><span>kg</span></label><input type="number" value="4.5" /></div>
+                <div class="field"><label><span>服务时限</span></label><input value="06:00" /></div>
+              </div>
+              <div class="field"><label><span>优先级</span></label><select><option>普通</option><option>高</option><option>紧急</option></select></div>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>环境条件</span><span id="windValue">6 m/s</span></div>
+              <div class="field"><label><span>风速</span><span id="windLabel">6 m/s</span></label><input id="windRange" type="range" min="0" max="15" value="6" /></div>
+              <div class="field"><label><span>风向</span></label><select><option>东南 135°</option><option>东 90°</option><option>南 180°</option><option>西北 315°</option></select></div>
+              <div class="field"><label><span>降雨等级</span></label><div class="choice" id="rainChoice"><button>无</button><button class="active">弱</button><button>中</button><button>强</button></div></div>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>安全规则</span></div>
+              <div class="two-fields">
+                <div class="field"><label><span>水平间距</span><span>m</span></label><input type="number" value="5" /></div>
+                <div class="field"><label><span>垂直间距</span><span>m</span></label><input type="number" value="3" /></div>
+              </div>
+              <div class="field"><label><span>最大任务时间</span></label><input value="12:00" /></div>
+              <div class="button-row"><button class="button secondary">恢复默认</button><button class="button primary" id="validateButton">检查场景</button></div>
+            </section>
+          </div>
+        </div>
+
+        <div class="student-only">
+          <div class="tabs"><button class="tab active">参数</button><button class="tab" id="resultTab">结果</button><button class="tab">曲线</button></div>
+          <div class="panel-scroll" id="studentParameterPanel">
+            <section class="section">
+              <div class="section-title"><span id="selectedDroneTitle">无人机 U-01</span><span>编组 A</span></div>
+              <div class="field"><label><span>分配任务</span></label><select id="taskSelect"><option>订单 O-03 · D-01</option><option>订单 O-08 · D-03</option><option>未分配</option></select></div>
+              <div class="two-fields">
+                <div class="field"><label><span>巡航高度</span><span>m</span></label><input type="number" value="80" /></div>
+                <div class="field"><label><span>巡航速度</span><span>m/s</span></label><input type="number" value="10" /></div>
+              </div>
+              <div class="field"><label><span>起飞时间</span></label><input value="00:06" /></div>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>计划估算</span></div>
+              <div class="scene-summary">
+                <div class="metric"><strong>6.2 km</strong><span>计划航程</span></div>
+                <div class="metric"><strong>05:48</strong><span>预计用时</span></div>
+                <div class="metric"><strong>24%</strong><span>返航余量</span></div>
+                <div class="metric"><strong>4.5 kg</strong><span>任务载荷</span></div>
+              </div>
+            </section>
+            <section class="section">
+              <div class="button-row"><button class="button secondary">批量参数</button><button class="button secondary">复制航线</button></div>
+            </section>
+          </div>
+          <div class="panel-scroll hidden" id="resultPanel">
+            <section class="section">
+              <div class="result-summary">
+                <div class="metric"><strong>87.5%</strong><span>任务完成</span></div>
+                <div class="metric"><strong>2</strong><span>严重问题</span></div>
+                <div class="metric"><strong>08:34</strong><span>总用时</span></div>
+              </div>
+              <button class="risk-row selected" data-time="170"><span class="risk-bar"></span><span class="risk-copy"><strong>航线进入禁飞区</strong><span>U-03 在 N-01 内持续 4.8 秒</span></span><span class="risk-time">02:50</span></button>
+              <button class="risk-row" data-time="335"><span class="risk-bar"></span><span class="risk-copy"><strong>两机安全间距不足</strong><span>U-02 与 U-07 最近距离 3.7 m</span></span><span class="risk-time">05:35</span></button>
+              <button class="risk-row" data-time="402"><span class="risk-bar warn"></span><span class="risk-copy"><strong>订单可能超时</strong><span>O-08 比服务时限晚 22 秒</span></span><span class="risk-time">06:42</span></button>
+            </section>
+            <section class="section">
+              <div class="section-title"><span>修改建议</span></div>
+              <p style="margin:0 0 10px;color:var(--muted);font-size:10px;line-height:1.6">调整 U-03 的中段航点，绕开禁飞区东侧边界；将 U-07 起飞时间延后 6 秒或调整其高度层。</p>
+              <button class="button primary full" id="backToDesign">返回设计并定位</button>
+            </section>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="statusbar">
+      <span class="ok">服务器已连接</span><span class="ok">在线地图正常</span><span id="saveStatus">草稿已保存</span><span>场景坐标：WGS84</span><span class="right">FPS 60 · 内存 428 MB · 客户端原型 V0.1</span>
+    </footer>
+  </div>
+
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script>
+    (() => {
+      const body = document.body;
+      const canvas = document.querySelector("#sceneCanvas");
+      const context = canvas.getContext("2d");
+      const roleButtons = [...document.querySelectorAll("[data-role]")];
+      const sceneButtons = [...document.querySelectorAll("[data-scene]")];
+      const toolButtons = [...document.querySelectorAll(".tool-button")];
+      const droneRows = [...document.querySelectorAll("[data-drone]")];
+      const rainButtons = [...document.querySelectorAll("#rainChoice button")];
+      let role = "teacher";
+      let scene = "logistics";
+      let playing = false;
+      let elapsed = 0;
+      let lastTime = 0;
+      let frameId = 0;
+      let resultVisible = false;
+      const duration = 500;
+
+      const drones = [
+        { color: "#147b58", offset: 0.00, route: 0 },
+        { color: "#2f6fa9", offset: 0.03, route: 1 },
+        { color: "#b9700c", offset: 0.06, route: 2 },
+        { color: "#7a61a8", offset: 0.09, route: 3 },
+        { color: "#bb4f49", offset: 0.12, route: 4 },
+        { color: "#267d88", offset: 0.15, route: 5 },
+        { color: "#147b58", offset: 0.18, route: 1 },
+        { color: "#2f6fa9", offset: 0.21, route: 2 },
+        { color: "#b9700c", offset: 0.24, route: 3 },
+        { color: "#7a61a8", offset: 0.27, route: 4 },
+        { color: "#bb4f49", offset: 0.30, route: 5 },
+        { color: "#267d88", offset: 0.33, route: 0 }
+      ];
+
+      function toast(message, type = "success") {
+        const element = document.createElement("div");
+        element.className = `toast ${type === "error" ? "error" : ""}`;
+        element.textContent = message;
+        document.querySelector("#toastStack").appendChild(element);
+        setTimeout(() => element.remove(), 2800);
+      }
+
+      function fitCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        draw();
+      }
+
+      function routePoints(index, width, height) {
+        const baseY = height - 118;
+        const endPoints = scene === "logistics"
+          ? [[0.77,0.26],[0.80,0.49],[0.63,0.20],[0.69,0.67],[0.47,0.25],[0.83,0.73]]
+          : [[0.56,0.30],[0.62,0.34],[0.57,0.41],[0.49,0.38],[0.45,0.31],[0.51,0.24]];
+        const end = endPoints[index % endPoints.length];
+        const spread = (index - 2.5) * 6;
+        return [
+          [width * 0.15 + spread, baseY],
+          [width * 0.29 + spread, height * (0.66 - index * 0.008)],
+          [width * 0.43 + spread * 0.5, height * (0.42 + (index % 2) * 0.06)],
+          [width * end[0], height * end[1]]
+        ];
+      }
+
+      function interpolate(points, progress) {
+        const scaled = Math.max(0, Math.min(0.9999, progress)) * (points.length - 1);
+        const segment = Math.floor(scaled);
+        const local = scaled - segment;
+        return [
+          points[segment][0] + (points[segment + 1][0] - points[segment][0]) * local,
+          points[segment][1] + (points[segment + 1][1] - points[segment][1]) * local
+        ];
+      }
+
+      function drawGrid(width, height) {
+        context.fillStyle = "#d9e0db";
+        context.fillRect(0, 0, width, height);
+        context.strokeStyle = "#c9d1cc";
+        context.lineWidth = 1;
+        for (let x = -height; x < width + height; x += 42) {
+          context.beginPath(); context.moveTo(x, 0); context.lineTo(x + height, height); context.stroke();
+        }
+        for (let x = 0; x < width + height * 2; x += 42) {
+          context.beginPath(); context.moveTo(x, 0); context.lineTo(x - height, height); context.stroke();
+        }
+      }
+
+      function drawBuildings(width, height) {
+        const buildings = [[0.22,0.20,0.12,0.18],[0.39,0.19,0.10,0.13],[0.31,0.47,0.10,0.16],[0.52,0.58,0.13,0.16],[0.69,0.35,0.09,0.13],[0.72,0.70,0.12,0.10]];
+        buildings.forEach(([x,y,w,h], index) => {
+          const px = width*x, py = height*y, pw = width*w, ph = height*h;
+          context.fillStyle = index % 2 ? "#87958d" : "#75857c";
+          context.fillRect(px, py, pw, ph);
+          context.fillStyle = "#9eaaa3";
+          context.beginPath(); context.moveTo(px,py); context.lineTo(px+12,py-9); context.lineTo(px+pw+12,py-9); context.lineTo(px+pw,py); context.closePath(); context.fill();
+          context.fillStyle = "rgba(255,255,255,.28)";
+          for (let row = py + 12; row < py + ph - 6; row += 16) {
+            for (let col = px + 9; col < px + pw - 5; col += 18) context.fillRect(col, row, 8, 5);
+          }
+        });
+      }
+
+      function drawZones(width, height) {
+        context.save();
+        context.setLineDash([7, 5]);
+        context.strokeStyle = "#147b58";
+        context.lineWidth = 2;
+        context.strokeRect(width*0.09, height*0.10, width*0.81, height*0.72);
+        context.restore();
+
+        context.fillStyle = "rgba(199,70,64,.22)";
+        context.strokeStyle = "#c74640";
+        context.lineWidth = 2;
+        context.beginPath();
+        context.moveTo(width*.48,height*.27); context.lineTo(width*.63,height*.25); context.lineTo(width*.67,height*.43); context.lineTo(width*.53,height*.47); context.closePath();
+        context.fill(); context.stroke();
+        context.fillStyle = "#963732"; context.font = "10px sans-serif"; context.fillText("禁飞区 N-01", width*.52, height*.34);
+
+        context.fillStyle = "rgba(20,123,88,.22)";
+        context.strokeStyle = "#147b58";
+        context.beginPath(); context.ellipse(width*.15,height-118,30,18,0,0,Math.PI*2); context.fill(); context.stroke();
+        context.fillStyle = "#0d6044"; context.fillText("配送中心 A", width*.10, height-86);
+      }
+
+      function drawTasks(width, height) {
+        const points = scene === "logistics"
+          ? [[.77,.26,"D-01"],[.80,.49,"D-02"],[.63,.20,"D-03"],[.69,.67,"D-04"],[.47,.25,"D-05"],[.83,.73,"D-06"]]
+          : [[.56,.30,"阶段 1"],[.62,.34,"阶段 1"],[.57,.41,"阶段 2"],[.49,.38,"阶段 2"],[.45,.31,"阶段 3"],[.51,.24,"阶段 3"]];
+        points.forEach(([x,y,label]) => {
+          context.fillStyle = scene === "logistics" ? "#2f6fa9" : "#b9700c";
+          context.beginPath(); context.arc(width*x,height*y,6,0,Math.PI*2); context.fill();
+          context.fillStyle = "#27322c"; context.font = "10px sans-serif"; context.fillText(label,width*x+9,height*y+3);
+        });
+      }
+
+      function drawRoutes(width, height) {
+        drones.slice(0, role === "student" ? 8 : 6).forEach((drone, index) => {
+          const points = routePoints(drone.route, width, height);
+          context.strokeStyle = drone.color;
+          context.globalAlpha = index === 0 ? 0.95 : 0.58;
+          context.lineWidth = index === 0 ? 3 : 1.7;
+          context.beginPath(); context.moveTo(points[0][0],points[0][1]);
+          points.slice(1).forEach(point => context.lineTo(point[0],point[1]));
+          context.stroke();
+          context.globalAlpha = 1;
+
+          const progress = role === "student" ? Math.max(0, Math.min(1, elapsed/duration - drone.offset)) : 0;
+          const position = interpolate(points, progress);
+          context.fillStyle = drone.color;
+          context.beginPath(); context.arc(position[0],position[1],index === 0 ? 7 : 5,0,Math.PI*2); context.fill();
+          context.strokeStyle = "white"; context.lineWidth = 2; context.stroke();
+          context.fillStyle = "#26312b"; context.font = "9px sans-serif"; context.fillText(`U-${String(index+1).padStart(2,"0")}`,position[0]+8,position[1]-7);
+        });
+        if (role === "student" && resultVisible) {
+          [[.58,.35],[.67,.54]].forEach(([x,y]) => {
+            context.fillStyle = "#c74640"; context.beginPath(); context.arc(width*x,height*y,10,0,Math.PI*2); context.fill();
+            context.fillStyle = "white"; context.font = "bold 12px sans-serif"; context.fillText("!",width*x-2.5,height*y+4);
+          });
+        }
+      }
+
+      function draw() {
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width, height = rect.height;
+        context.clearRect(0,0,width,height);
+        drawGrid(width,height); drawBuildings(width,height); drawZones(width,height); drawTasks(width,height); drawRoutes(width,height);
+      }
+
+      function updateRole(nextRole) {
+        role = nextRole;
+        body.classList.toggle("student-mode", role === "student");
+        roleButtons.forEach(button => button.classList.toggle("active", button.dataset.role === role));
+        document.querySelector("#documentTitle").textContent = role === "teacher" ? `${scene === "logistics" ? "城市物流配送" : "城市集群表演"}实验 · 场景草稿` : `${scene === "logistics" ? "城市物流配送" : "城市集群表演"}实验 · 方案 V3`;
+        document.querySelector("#documentState").textContent = role === "teacher" ? "自动保存于 14:32 · 场景版本未发布" : "场景版本 S1 · 方案已自动保存";
+        document.querySelector("#leftTitle").textContent = role === "teacher" ? "场景配置" : "资源与任务";
+        document.querySelector("#leftMeta").textContent = role === "teacher" ? "12 架无人机" : "任务覆盖 7/8";
+        document.querySelector("#rightTitle").textContent = role === "teacher" ? "对象属性" : "方案参数";
+        document.querySelector("#rightMeta").textContent = role === "teacher" ? "教师可编辑" : "学生方案";
+        document.querySelector("#stageMode").textContent = role === "teacher" ? "教师场景编辑" : "学生方案设计";
+        document.querySelector("#checkButton").textContent = role === "teacher" ? "场景检查" : "方案检查";
+        document.querySelector("#primaryAction").textContent = role === "teacher" ? "发布实训" : "运行仿真";
+        playing = false; elapsed = 0; resultVisible = false;
+        showParameters(); updateTimeline(); draw();
+      }
+
+      function updateScene(nextScene) {
+        scene = nextScene;
+        sceneButtons.forEach(button => button.classList.toggle("active", button.dataset.scene === scene));
+        const logistics = scene === "logistics";
+        document.querySelector("#taskGroupLabel").textContent = logistics ? "配送任务" : "表演阶段";
+        document.querySelector("#taskCount").textContent = logistics ? "8" : "3";
+        document.querySelector("#summaryTaskCount").textContent = logistics ? "8" : "3";
+        document.querySelector("#summaryTaskLabel").textContent = logistics ? "配送订单" : "表演阶段";
+        document.querySelector("#selectedObjectLabel").textContent = logistics ? "配送点 D-03" : "阶段 2 · 圆形队形";
+        document.querySelector("#propertyObjectTitle").textContent = logistics ? "配送点 D-03" : "阶段 2 · 圆形队形";
+        document.querySelector("#pointTool").textContent = logistics ? "配送点" : "目标点";
+        document.querySelector("#unassignedTask").textContent = logistics ? "订单 O-08 · D-03" : "阶段 3 · 还缺 2 个目标";
+        updateRole(role); draw();
+      }
+
+      function updateTimeline() {
+        const progress = Math.min(1, elapsed/duration);
+        document.querySelector("#timeProgress").style.width = `${progress*100}%`;
+        const totalSeconds = Math.round(progress*500);
+        const minutes = Math.floor(totalSeconds/60), seconds = totalSeconds%60;
+        document.querySelector("#timeText").textContent = `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")} / 08:20`;
+      }
+
+      function animate(time) {
+        if (!playing) return;
+        if (!lastTime) lastTime = time;
+        elapsed += (time-lastTime)/20;
+        lastTime = time;
+        if (elapsed >= duration) {
+          elapsed = duration; playing = false; resultVisible = true;
+          document.querySelector("#playButton").textContent = "▶";
+          document.querySelector("#playState").textContent = "仿真完成 · 发现 3 个问题";
+          showResults(); toast("仿真完成：任务完成率 87.5%，发现 3 个问题", "error");
+        }
+        updateTimeline(); draw();
+        if (playing) frameId = requestAnimationFrame(animate);
+      }
+
+      function showResults() {
+        resultVisible = true;
+        document.querySelector("#studentParameterPanel").classList.add("hidden");
+        document.querySelector("#resultPanel").classList.remove("hidden");
+        const tabs = [...document.querySelectorAll(".right-panel .student-only .tab")];
+        tabs.forEach(tab => tab.classList.remove("active"));
+        document.querySelector("#resultTab").classList.add("active");
+        document.querySelector("#rightTitle").textContent = "仿真结果";
+        document.querySelector("#rightMeta").textContent = "方案 V3 · 本地运行";
+      }
+
+      function showParameters() {
+        document.querySelector("#studentParameterPanel").classList.remove("hidden");
+        document.querySelector("#resultPanel").classList.add("hidden");
+        document.querySelector("#rightTitle").textContent = role === "teacher" ? "对象属性" : "方案参数";
+        document.querySelector("#rightMeta").textContent = role === "teacher" ? "教师可编辑" : "学生方案";
+      }
+
+      roleButtons.forEach(button => button.addEventListener("click", () => updateRole(button.dataset.role)));
+      sceneButtons.forEach(button => button.addEventListener("click", () => updateScene(button.dataset.scene)));
+      rainButtons.forEach(button => button.addEventListener("click", () => { rainButtons.forEach(item => item.classList.remove("active")); button.classList.add("active"); document.querySelector("#saveStatus").textContent = "正在保存环境参数..."; setTimeout(() => document.querySelector("#saveStatus").textContent = "草稿已保存", 600); }));
+      toolButtons.forEach(button => button.addEventListener("click", () => { toolButtons.forEach(item => item.classList.remove("active")); button.classList.add("active"); }));
+      droneRows.forEach(row => row.addEventListener("click", () => { droneRows.forEach(item => item.classList.remove("selected")); row.classList.add("selected"); document.querySelector("#selectedDroneTitle").textContent = row.querySelector("strong").textContent; }));
+
+      document.querySelector("#windRange").addEventListener("input", event => {
+        document.querySelector("#windValue").textContent = `${event.target.value} m/s`;
+        document.querySelector("#windLabel").textContent = `${event.target.value} m/s`;
+      });
+
+      document.querySelector("#checkButton").addEventListener("click", () => toast(role === "teacher" ? "场景检查完成：2 个错误，1 个警告" : "方案结构完整，可以运行仿真", role === "teacher" ? "error" : "success"));
+      document.querySelector("#validateButton").addEventListener("click", () => toast("场景检查完成：配送点 D-04 位于禁飞区，订单 O-12 超载", "error"));
+      document.querySelector("#primaryAction").addEventListener("click", () => {
+        if (role === "teacher") { toast("发布前需要处理 2 个场景错误", "error"); return; }
+        if (!playing) {
+          if (elapsed >= duration) elapsed = 0;
+          playing = true; resultVisible = false; lastTime = 0;
+          document.querySelector("#playButton").textContent = "Ⅱ";
+          document.querySelector("#playState").textContent = "仿真运行中 · 1x";
+          showParameters(); frameId = requestAnimationFrame(animate);
+        }
+      });
+      document.querySelector("#playButton").addEventListener("click", () => {
+        if (playing) { playing = false; cancelAnimationFrame(frameId); document.querySelector("#playButton").textContent = "▶"; document.querySelector("#playState").textContent = "仿真已暂停"; }
+        else { playing = true; lastTime = 0; document.querySelector("#playButton").textContent = "Ⅱ"; document.querySelector("#playState").textContent = "仿真运行中 · 1x"; frameId = requestAnimationFrame(animate); }
+      });
+      document.querySelector("#resetButton").addEventListener("click", () => { playing = false; cancelAnimationFrame(frameId); elapsed = 0; resultVisible = false; document.querySelector("#playButton").textContent = "▶"; document.querySelector("#playState").textContent = "方案设计模式"; showParameters(); updateTimeline(); draw(); });
+      document.querySelector("#stepButton").addEventListener("click", () => { playing = false; elapsed = Math.min(duration, elapsed + 10); updateTimeline(); draw(); });
+      document.querySelector("#backToDesign").addEventListener("click", () => { resultVisible = false; showParameters(); document.querySelector("#playState").textContent = "方案设计模式 · 已定位 U-03"; draw(); toast("已定位 U-03 的禁飞区航段"); });
+      document.querySelectorAll(".risk-row").forEach(row => row.addEventListener("click", () => { document.querySelectorAll(".risk-row").forEach(item => item.classList.remove("selected")); row.classList.add("selected"); elapsed = Math.min(duration, Number(row.dataset.time)); updateTimeline(); draw(); }));
+
+      window.addEventListener("resize", fitCanvas);
+      fitCanvas();
+    })();
+  </script>
+</body>
+</html>

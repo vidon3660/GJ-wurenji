@@ -1,0 +1,16 @@
+node_modules
+**/dist
+!apps/server/dist
+!apps/server/dist/**
+!apps/web/dist
+!apps/web/dist/**
+!packages/shared/dist
+!packages/shared/dist/**
+!packages/simulation/dist
+!packages/simulation/dist/**
+**/*.tsbuildinfo
+.git
+.codegraph
+data
+prototype
+*.md

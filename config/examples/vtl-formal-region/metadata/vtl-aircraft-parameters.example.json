@@ -1,0 +1,15 @@
+{
+  "modelCode": "REPLACE-VTOL-MODEL",
+  "version": "1.0.0",
+  "batteryCapacityWh": 1200,
+  "reserveEnergyRatio": 0.2,
+  "verticalPowerWatts": 2400,
+  "hoverPowerWatts": 1800,
+  "cruisePowerWatts": 900,
+  "taskPowerWatts": 1050,
+  "climbSpeedMps": 4,
+  "cruiseSpeedMps": 22,
+  "transitionSpeedMps": 12,
+  "minimumTransitionHeightMeters": 60,
+  "maximumOperatingAltitudeMeters": 300
+}

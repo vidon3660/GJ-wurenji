@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#202522" />
+    <title>云阵低空教学仿真平台</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://cesium.com" />
+    <link rel="preconnect" href="https://server.arcgisonline.com" />
+    <link
+      rel="stylesheet"
+      href="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Widgets/widgets.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <button class="icon-button mobile-only" id="openLeft" aria-label="打开任务面板" title="任务面板">
+            <i data-lucide="panel-left"></i>
+          </button>
+          <div class="brand-mark" aria-hidden="true"><i data-lucide="orbit"></i></div>
+          <div class="brand-copy">
+            <strong>云阵</strong>
+            <span>低空无人集群教学仿真平台</span>
+          </div>
+        </div>
+
+        <div class="task-heading">
+          <div class="breadcrumb">
+            <span>集群规划基础</span>
+            <i data-lucide="chevron-right"></i>
+            <span>任务 03</span>
+          </div>
+          <h1>障碍物与禁飞区避让</h1>
+        </div>
+
+        <div class="header-actions">
+          <span class="save-state"><i data-lucide="cloud-check"></i> 已保存 14:32</span>
+          <button class="button ghost compact" id="historyButton">
+            <i data-lucide="history"></i><span>版本 V4</span>
+          </button>
+          <button class="button secondary compact" id="validateButton">
+            <i data-lucide="shield-check"></i><span>校验方案</span>
+          </button>
+          <button class="button primary compact" id="submitButton">
+            <i data-lucide="send"></i><span>提交任务</span>
+          </button>
+          <button class="avatar-button" title="个人中心" aria-label="个人中心">陈</button>
+          <button class="icon-button mobile-only" id="openRight" aria-label="打开属性面板" title="属性面板">
+            <i data-lucide="panel-right"></i>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="left-panel side-panel" id="leftPanel">
+          <div class="mobile-panel-head">
+            <strong>任务与对象</strong>
+            <button class="icon-button" data-close-panel aria-label="关闭"><i data-lucide="x"></i></button>
+          </div>
+
+          <div class="task-summary">
+            <div class="task-summary-head">
+              <span class="status-pill active"><span></span>进行中</span>
+              <span class="task-time"><i data-lucide="clock-3"></i>剩余 1天 08:42</span>
+            </div>
+            <p>为 6 架无人机重新规划航线，避开建筑障碍和禁飞区域，并保持安全间距。</p>
+            <button class="text-button" id="showRequirements">查看任务要求<i data-lucide="arrow-up-right"></i></button>
+          </div>
+
+          <div class="panel-tabs" role="tablist">
+            <button class="panel-tab active" data-left-tab="objects" role="tab">场景对象</button>
+            <button class="panel-tab" data-left-tab="versions" role="tab">方案版本</button>
+          </div>
+
+          <div class="panel-content" id="objectsPanel">
+            <div class="section-label-row">
+              <span>对象列表</span>
+              <div class="inline-actions">
+                <button class="icon-button small" title="添加对象" aria-label="添加对象"><i data-lucide="plus"></i></button>
+                <button class="icon-button small" title="更多操作" aria-label="更多操作"><i data-lucide="ellipsis"></i></button>
+              </div>
+            </div>
+
+            <div class="tree-list">
+              <div class="tree-group expanded">
+                <button class="tree-row group-row">
+                  <i data-lucide="chevron-down" class="chevron"></i>
+                  <i data-lucide="map"></i>
+                  <span>训练场景</span>
+                  <span class="count">4</span>
+                </button>
+                <div class="tree-children">
+                  <button class="tree-row" data-focus="boundary">
+                    <i data-lucide="square-dashed"></i><span>安全边界</span>
+                    <span class="visibility on" data-layer="boundary"><i data-lucide="eye"></i></span>
+                  </button>
+                  <button class="tree-row warning-row" data-focus="noFly">
+                    <i data-lucide="octagon-alert"></i><span>临时禁飞区</span>
+                    <span class="visibility on" data-layer="noFly"><i data-lucide="eye"></i></span>
+                  </button>
+                  <button class="tree-row" data-focus="building">
+                    <i data-lucide="building-2"></i><span>教学楼障碍物</span>
+                    <span class="visibility on" data-layer="building"><i data-lucide="eye"></i></span>
+                  </button>
+                  <button class="tree-row" data-focus="landing">
+                    <i data-lucide="circle-dot-dashed"></i><span>起降区 A</span>
+                    <span class="visibility on" data-layer="landing"><i data-lucide="eye"></i></span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="tree-group expanded">
+                <button class="tree-row group-row">
+                  <i data-lucide="chevron-down" class="chevron"></i>
+                  <i data-lucide="route"></i>
+                  <span>飞行任务</span>
+                  <span class="count">6</span>
+                </button>
+                <div class="tree-children drone-list" id="droneList"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-content hidden" id="versionsPanel">
+            <div class="section-label-row"><span>自动保存的方案</span><span>共 4 版</span></div>
+            <div class="version-list">
+              <button class="version-item current"><span>V4 当前版本</span><small>今天 14:32 · 自动保存</small></button>
+              <button class="version-item"><span>V3 调整高度层</span><small>今天 14:18 · 2 个风险</small></button>
+              <button class="version-item"><span>V2 绕过禁飞区</span><small>今天 13:57 · 4 个风险</small></button>
+              <button class="version-item"><span>V1 初始方案</span><small>今天 13:41 · 7 个风险</small></button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="map-stage">
+          <div class="osm-fallback" id="osmFallback" aria-hidden="true"></div>
+          <div id="cesiumContainer" aria-label="三维任务地图"></div>
+          <a class="osm-attribution" href="https://www.esri.com" target="_blank" rel="noreferrer">Tiles © Esri</a>
+          <div class="map-loading" id="mapLoading">
+            <div class="loading-spinner"></div>
+            <strong>正在加载三维地图</strong>
+            <span>在线地图服务连接中</span>
+          </div>
+
+          <div class="mode-switch" aria-label="工作模式">
+            <button class="mode-button active" data-mode="design"><i data-lucide="pencil-ruler"></i>设计</button>
+            <button class="mode-button" data-mode="simulate"><i data-lucide="play-circle"></i>仿真</button>
+            <button class="mode-button" data-mode="review"><i data-lucide="scan-search"></i>复盘</button>
+          </div>
+
+          <div class="map-tools" aria-label="地图工具">
+            <button class="tool-button active" data-tool="select" title="选择" aria-label="选择"><i data-lucide="mouse-pointer-2"></i></button>
+            <button class="tool-button" data-tool="waypoint" title="添加航点" aria-label="添加航点"><i data-lucide="map-pin-plus"></i></button>
+            <button class="tool-button" data-tool="route" title="绘制航线" aria-label="绘制航线"><i data-lucide="route"></i></button>
+            <button class="tool-button" data-tool="area" title="绘制区域" aria-label="绘制区域"><i data-lucide="pentagon"></i></button>
+            <span class="tool-separator"></span>
+            <button class="tool-button" id="undoButton" title="撤销" aria-label="撤销"><i data-lucide="undo-2"></i></button>
+            <button class="tool-button" id="redoButton" title="重做" aria-label="重做"><i data-lucide="redo-2"></i></button>
+          </div>
+
+          <div class="map-controls">
+            <button class="tool-button" id="homeView" title="回到任务区域" aria-label="回到任务区域"><i data-lucide="focus"></i></button>
+            <button class="tool-button" id="zoomIn" title="放大" aria-label="放大"><i data-lucide="plus"></i></button>
+            <button class="tool-button" id="zoomOut" title="缩小" aria-label="缩小"><i data-lucide="minus"></i></button>
+            <button class="tool-button" id="toggle2D" title="切换二维/三维" aria-label="切换二维/三维"><span class="view-label">3D</span></button>
+          </div>
+
+          <div class="map-legend">
+            <span><i class="legend-dot route-dot"></i>规划航线</span>
+            <span><i class="legend-dot risk-dot"></i>风险点</span>
+            <span><i class="legend-area"></i>禁飞区</span>
+          </div>
+
+          <div class="draw-hint hidden" id="drawHint">
+            <i data-lucide="mouse-pointer-click"></i>
+            <span>单击地图添加航点，按 Esc 结束</span>
+          </div>
+        </section>
+
+        <aside class="right-panel side-panel" id="rightPanel">
+          <div class="mobile-panel-head">
+            <strong>参数与校验</strong>
+            <button class="icon-button" data-close-panel aria-label="关闭"><i data-lucide="x"></i></button>
+          </div>
+
+          <div class="panel-tabs" role="tablist">
+            <button class="panel-tab active" data-right-tab="properties" role="tab">参数</button>
+            <button class="panel-tab" data-right-tab="risks" role="tab">
+              风险<span class="tab-badge">2</span>
+            </button>
+          </div>
+
+          <div class="panel-content properties-panel" id="propertiesPanel">
+            <div class="selection-card">
+              <div class="selection-icon"><i data-lucide="plane"></i></div>
+              <div><span>当前对象</span><strong id="selectedDroneName">无人机 03 · 航线</strong></div>
+              <button class="icon-button small" title="定位对象" id="locateSelected" aria-label="定位对象"><i data-lucide="crosshair"></i></button>
+            </div>
+
+            <div class="property-section">
+              <div class="section-title"><span>基础参数</span><button class="icon-button small" title="重置参数" aria-label="重置参数"><i data-lucide="rotate-ccw"></i></button></div>
+              <label class="field-label" for="routeName">航线名称</label>
+              <input class="text-input" id="routeName" value="东侧巡查航线" />
+
+              <div class="field-grid">
+                <label class="field-group">
+                  <span>飞行高度</span>
+                  <div class="unit-input"><input id="altitudeInput" type="number" value="80" min="20" max="120" /><span>m</span></div>
+                </label>
+                <label class="field-group">
+                  <span>巡航速度</span>
+                  <div class="unit-input"><input id="speedInput" type="number" value="8" min="1" max="15" /><span>m/s</span></div>
+                </label>
+              </div>
+
+              <label class="field-group full">
+                <span>安全间距 <output id="spacingOutput">8 m</output></span>
+                <input id="spacingRange" type="range" min="3" max="20" value="8" />
+              </label>
+
+              <label class="field-group full">
+                <span>起飞延迟</span>
+                <div class="unit-input"><input type="number" value="6" min="0" max="60" /><span>秒</span></div>
+              </label>
+            </div>
+
+            <div class="property-section route-section">
+              <div class="section-title"><span>航点序列</span><button class="text-button" id="addWaypointButton"><i data-lucide="plus"></i>添加</button></div>
+              <div class="waypoint-list" id="waypointList">
+                <button class="waypoint-item"><span class="waypoint-index">01</span><span><strong>起飞点 A3</strong><small>高度 0 m · 等待 6 s</small></span><i data-lucide="grip-vertical"></i></button>
+                <button class="waypoint-item"><span class="waypoint-index">02</span><span><strong>WP-03-01</strong><small>高度 80 m · 速度 6 m/s</small></span><i data-lucide="grip-vertical"></i></button>
+                <button class="waypoint-item selected"><span class="waypoint-index">03</span><span><strong>WP-03-02</strong><small>高度 80 m · 速度 8 m/s</small></span><i data-lucide="grip-vertical"></i></button>
+                <button class="waypoint-item"><span class="waypoint-index">04</span><span><strong>降落点 A3</strong><small>高度 0 m · 自动降落</small></span><i data-lucide="grip-vertical"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-content hidden" id="risksPanel">
+            <div class="risk-summary">
+              <div><strong>2</strong><span>待修正风险</span></div>
+              <div><strong>92</strong><span>当前得分</span></div>
+              <div><strong>4/5</strong><span>规则通过</span></div>
+            </div>
+            <div class="risk-list">
+              <button class="risk-card critical" data-risk="noFly">
+                <div class="risk-card-head"><span class="risk-level">严重</span><time>00:42</time></div>
+                <strong>航线进入临时禁飞区</strong>
+                <p>无人机 03 的第 2 至 3 航段穿越禁飞区东侧边界，持续约 4.8 秒。</p>
+                <span class="risk-action">在地图中定位<i data-lucide="locate-fixed"></i></span>
+              </button>
+              <button class="risk-card warning" data-risk="separation">
+                <div class="risk-card-head"><span class="risk-level">警告</span><time>01:16</time></div>
+                <strong>两机水平间距不足</strong>
+                <p>无人机 03 与无人机 05 最近间距 4.2 m，低于规则要求的 5 m。</p>
+                <span class="risk-action">在地图中定位<i data-lucide="locate-fixed"></i></span>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="timeline-panel">
+          <div class="playback-controls">
+            <button class="play-button" id="playButton" aria-label="播放仿真" title="播放仿真"><i data-lucide="play"></i></button>
+            <button class="icon-button" id="stopButton" aria-label="停止仿真" title="停止仿真"><i data-lucide="square"></i></button>
+            <span class="time-readout"><strong id="currentTime">00:00</strong><span>/ 02:24</span></span>
+          </div>
+
+          <div class="timeline-track-wrap">
+            <div class="timeline-labels"><span>00:00</span><span>00:36</span><span>01:12</span><span>01:48</span><span>02:24</span></div>
+            <div class="timeline-track">
+              <div class="timeline-progress" id="timelineProgress"></div>
+              <span class="timeline-event critical" style="left: 29.2%" title="禁飞区风险"></span>
+              <span class="timeline-event warning" style="left: 52.8%" title="间距不足"></span>
+              <input id="timelineRange" type="range" min="0" max="144" value="0" aria-label="仿真时间轴" />
+            </div>
+          </div>
+
+          <div class="timeline-actions">
+            <button class="speed-button" id="speedButton">1.0x</button>
+            <button class="icon-button" id="expandTimeline" title="展开状态曲线" aria-label="展开状态曲线"><i data-lucide="chart-no-axes-combined"></i></button>
+          </div>
+        </section>
+      </main>
+
+      <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+      <div class="mobile-scrim" id="mobileScrim"></div>
+    </div>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.127/Build/Cesium/Cesium.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

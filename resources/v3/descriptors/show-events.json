@@ -1,0 +1,20 @@
+{
+  "packageType": "EVENT",
+  "name": "V3 城市编队表演事件",
+  "version": "1.0.0",
+  "schemaVersion": 1,
+  "minimumPlatformVersion": "0.1.0",
+  "keyId": "local-teaching-v3",
+  "content": {
+    "sceneType": "CITY_SHOW",
+    "events": [
+      { "code": "WEATHER_CHANGE", "title": "局部气象条件恶化", "category": "WEATHER_ENVIRONMENT", "severity": "WARNING", "recommendedActions": ["PAUSE_PROGRAM", "RETURN_ALL"] },
+      { "code": "COMMUNICATION_LOSS", "title": "通信链路异常", "category": "COMMUNICATION_LINK", "severity": "ERROR", "recommendedActions": ["PAUSE_PROGRAM", "GROUP_RETURN"] },
+      { "code": "AIRCRAFT_FAULT", "title": "无人机设备故障", "category": "AIRCRAFT_DEVICE", "severity": "ERROR", "recommendedActions": ["SINGLE_LAND", "REMOVE_FROM_MISSION"] },
+      { "code": "AUDIENCE_INTRUSION", "title": "观众隔离区出现入侵", "category": "SAFETY_BOUNDARY", "severity": "CRITICAL", "recommendedActions": ["ABORT_PROGRAM", "EMERGENCY_LAND_ALL"] }
+    ]
+  },
+  "files": [
+    { "path": "payload/events.json", "source": "payload/events.json", "role": "EVENT_DEFINITIONS", "mimeType": "application/json" }
+  ]
+}

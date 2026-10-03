@@ -1,0 +1,4 @@
+{
+  "version": "1.0.0",
+  "events": "由同目录 descriptor 的 content.events 提供；该文件用于资源归档审计与离线检查。"
+}

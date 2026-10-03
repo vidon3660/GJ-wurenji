@@ -1,0 +1,21 @@
+{
+  "packageType": "DOCUMENT_TEMPLATE",
+  "name": "城市编队表演申报母版",
+  "version": "1.0.0",
+  "schemaVersion": 1,
+  "minimumPlatformVersion": "0.1.0",
+  "keyId": "local-teaching-v3",
+  "content": {
+    "sceneType": "CITY_SHOW",
+    "documents": [
+      { "code": "AIRSPACE_APPLICATION_FORM", "title": "无人机临时飞行空域申请表", "path": "payload/airspace-application-form.docx" },
+      { "code": "AIRSPACE_APPLICATION_LETTER", "title": "关于申请无人机临时飞行空域的函", "path": "payload/airspace-application-letter.docx" },
+      { "code": "SAFETY_EMERGENCY_PLAN", "title": "安全应急预案", "path": "payload/safety-emergency-plan.docx" }
+    ]
+  },
+  "files": [
+    { "path": "payload/airspace-application-form.docx", "source": "payload/airspace-application-form.docx", "role": "AIRSPACE_APPLICATION_FORM", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    { "path": "payload/airspace-application-letter.docx", "source": "payload/airspace-application-letter.docx", "role": "AIRSPACE_APPLICATION_LETTER", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    { "path": "payload/safety-emergency-plan.docx", "source": "payload/safety-emergency-plan.docx", "role": "SAFETY_EMERGENCY_PLAN", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }
+  ]
+}

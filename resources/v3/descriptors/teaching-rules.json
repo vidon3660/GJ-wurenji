@@ -1,0 +1,19 @@
+{
+  "packageType": "RULE",
+  "name": "V3 教学规则基线",
+  "version": "1.0.0",
+  "schemaVersion": 1,
+  "minimumPlatformVersion": "0.1.0",
+  "keyId": "local-teaching-v3",
+  "content": {
+    "rules": [
+      { "code": "STAGE_GATE", "title": "阶段门禁", "sceneTypes": ["CITY_SHOW", "CITY_LOGISTICS"] },
+      { "code": "SPATIAL_SAFETY", "title": "空间安全", "sceneTypes": ["CITY_SHOW", "CITY_LOGISTICS"] },
+      { "code": "RUNTIME_RESPONSE", "title": "运行告警处置", "sceneTypes": ["CITY_SHOW", "CITY_LOGISTICS"] },
+      { "code": "EVALUATION_METRICS", "title": "客观指标评价", "sceneTypes": ["CITY_SHOW", "CITY_LOGISTICS"] }
+    ]
+  },
+  "files": [
+    { "path": "payload/rules.json", "source": "payload/rules.json", "role": "RULE_DEFINITIONS", "mimeType": "application/json" }
+  ]
+}

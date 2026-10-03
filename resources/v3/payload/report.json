@@ -1,0 +1,6 @@
+{
+  "version": "2.1.0",
+  "outputs": ["SINGLE_DOCX", "SINGLE_PDF"],
+  "sections": ["planningMap", "flightTimeline", "objectiveMetrics", "teacherRubric", "eventResponse"],
+  "rubricScenes": ["CITY_SHOW", "CITY_LOGISTICS"]
+}

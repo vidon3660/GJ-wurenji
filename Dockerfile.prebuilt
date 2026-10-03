@@ -1,0 +1,23 @@
+FROM node:24-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production
+ARG PLATFORM_VERSION="0.1.0"
+ENV PLATFORM_VERSION=$PLATFORM_VERSION
+ARG DEBIAN_MIRROR=""
+RUN if [ -n "$DEBIAN_MIRROR" ]; then sed -i "s|http://deb.debian.org|$DEBIAN_MIRROR|g" /etc/apt/sources.list.d/debian.sources; fi \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends curl fontconfig fonts-noto-cjk \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json ./
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/simulation/package.json ./packages/simulation/package.json
+RUN npm ci --omit=dev
+COPY apps/server/dist ./apps/server/dist
+COPY apps/web/dist ./apps/web/dist
+COPY packages/shared/dist ./packages/shared/dist
+COPY packages/simulation/dist ./packages/simulation/dist
+RUN mkdir -p /app/data/simulation-runs /app/data/evaluation-results
+EXPOSE 3000
+CMD ["node", "apps/server/dist/main.js"]
