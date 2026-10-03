@@ -30,4 +30,15 @@ describe("workspace resume", () => {
     clearWorkspaceResumeTarget(storage, "student-1")
     expect(values.has(workspaceResumeKey("student-1"))).toBe(false)
   })
+
+  it("keeps project navigation usable when browser storage is blocked", () => {
+    const storage = {
+      getItem: () => { throw new Error("storage blocked") },
+      setItem: () => { throw new Error("quota exceeded") },
+      removeItem: () => { throw new Error("storage blocked") }
+    }
+    expect(loadWorkspaceResumeTarget(storage, "student-1")).toBeNull()
+    expect(() => saveWorkspaceResumeTarget(storage, "student-1", "project-1")).not.toThrow()
+    expect(() => clearWorkspaceResumeTarget(storage, "student-1")).not.toThrow()
+  })
 })
