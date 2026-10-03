@@ -53,7 +53,7 @@ import {
   mapRouteColors,
   regionLayerCesiumColors
 } from "../map-visual-theme"
-import { logisticsFocusCoordinates, logisticsNodeTypeVisible } from "../logistics-map-tools"
+import { isSelectedLogisticsRouteEntity, logisticsFocusCoordinates, logisticsNodeTypeVisible } from "../logistics-map-tools"
 import { createV3MapDataStateTracker, type V3MapDataState, type V3MapDataStateTracker, type V3MapImageryState } from "../map-loading-state"
 import { regionMapResourceKey } from "../map-resources"
 import { loadV3MapResources } from "../map-resources-loader"
@@ -159,6 +159,8 @@ async function reloadMapResources() {
 onMounted(async () => {
   if (!container.value) return
   window.addEventListener("keydown", handleKeyDown)
+  window.addEventListener("pointerup", handleGlobalPointerUp)
+  window.addEventListener("blur", handleGlobalPointerUp)
   compactLabels = container.value.clientWidth <= 520
   labelResizeObserver = new ResizeObserver(([entry]) => {
     const nextCompactLabels = (entry?.contentRect.width ?? container.value?.clientWidth ?? 0) <= 520
@@ -204,6 +206,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown)
+  window.removeEventListener("pointerup", handleGlobalPointerUp)
+  window.removeEventListener("blur", handleGlobalPointerUp)
   viewerReady.value = false
   mapResourceGeneration += 1
   offlineBuildingGeneration += 1
@@ -326,10 +330,20 @@ function configureInteractions() {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || (!props.addWaypointMode && !props.toolMode)) return
+  if (event.key !== "Escape" || (!props.addWaypointMode && !props.toolMode && !draggedWaypoint)) return
   event.preventDefault()
+  endDrag()
   resetToolInteraction()
   emit("interactionCancel")
+}
+
+/**
+ * Cesium's canvas handler only receives LEFT_UP while the pointer remains
+ * over the canvas. Releasing outside the map would otherwise leave camera
+ * rotation/translation disabled and the next map interaction unusable.
+ */
+function handleGlobalPointerUp() {
+  if (draggedWaypoint) endDrag()
 }
 
 function handleClick(position: Cartesian2) {
@@ -367,6 +381,14 @@ function handleClick(position: Cartesian2) {
     return
   }
   if (id.startsWith("log-route:")) {
+    // In insertion mode the selected route line is a valid map target.
+    // Handle it before route selection so users can place a waypoint directly
+    // on an existing segment instead of receiving only a selection event.
+    if (props.editable && props.addWaypointMode && isSelectedLogisticsRouteEntity(id, props.selectedRouteId)) {
+      const coordinate = pickCoordinate(position)
+      if (coordinate) emit("waypointCreated", coordinate)
+      return
+    }
     const routeId = id.split(":")[1]
     if (routeId) emit("routeSelect", routeId)
     return
@@ -795,6 +817,7 @@ function renderMeasurement(measurement: ShowAreaDistanceMeasurement) {
 }
 
 function resetToolInteraction() {
+  endDrag()
   measurePoints = []
   cursorPoint = null
   renderTools()
