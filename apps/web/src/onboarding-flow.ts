@@ -94,6 +94,27 @@ export function saveOnboardingStep(storage: StorageLike, userId: string, state: 
 export function clearOnboardingProgress(storage: StorageLike, userId: string, state: OnboardingState): void {
   remove(storage, onboardingStorageKey(userId, state, "step"))
   clearOnboardingMission(storage, userId, state)
+  clearOnboardingDeferred(storage, userId, state)
+}
+
+/**
+ * Record that the guide was intentionally postponed.  The marker is scoped to
+ * the guide version and account so a refresh does not interrupt the learner,
+ * while a newly assigned student project can still trigger the guide again.
+ * Teachers use the stable `teacher` marker because they do not have a project
+ * id to scope the decision to.
+ */
+export function loadOnboardingDeferred(storage: StorageLike, userId: string, state: OnboardingState): string | null {
+  const value = read(storage, onboardingStorageKey(userId, state, "deferred"))
+  return value && value.trim() ? value : null
+}
+
+export function saveOnboardingDeferred(storage: StorageLike, userId: string, state: OnboardingState, projectId: string | null): void {
+  write(storage, onboardingStorageKey(userId, state, "deferred"), projectId ?? "teacher")
+}
+
+export function clearOnboardingDeferred(storage: StorageLike, userId: string, state: OnboardingState): void {
+  remove(storage, onboardingStorageKey(userId, state, "deferred"))
 }
 
 export function clearOnboardingMission(storage: StorageLike, userId: string, state: OnboardingState): void {
