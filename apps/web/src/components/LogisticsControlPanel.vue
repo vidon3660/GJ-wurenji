@@ -264,8 +264,11 @@ function statusClass(status: FlightMissionStatus) {
   text-align: left;
   background: #fff;
   cursor: pointer;
-  min-width: 620px;
-  white-space: nowrap;
+  /* The card is a horizontal-strip item, but it must still honour the
+   * available panel width. A 620px minimum made the control surface spill
+   * out of the map on tablets and phones. */
+  min-width: 218px;
+  white-space: normal;
 }
 
 .mission-card.selected {
