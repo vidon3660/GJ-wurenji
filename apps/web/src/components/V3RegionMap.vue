@@ -66,7 +66,7 @@ import V3MapTerrainNotice from "./V3MapTerrainNotice.vue"
 import { vtlLandingSiteLabelText, vtlTaskLabelText } from "../vtl-map-labels"
 import { featureHeightMeters, isObstacleFeature, obstacleRadiusMeters } from "../map-3d-feature"
 import { parseVtlMapPickId } from "../vtl-map-picking"
-import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
+import { buildingHeightMeters, hasRenderableOfflineBuildingFeatures, resolveBuildingDataUrl } from "../map-building-layer"
 
 const props = defineProps<{
   region: V3RegionCatalogItem | null
@@ -211,8 +211,15 @@ async function loadOfflineBuildingLayer() {
     }
     viewer.dataSources.add(source)
     offlineBuildingSource = source
+    // Replace the lightweight manifest footprints only after the external
+    // GeoJSON has actually loaded. If the package URL is unavailable, keep the
+    // manifest buildings visible so planning never loses its spatial context.
+    layerRenderKey = ""
+    renderLayers()
   } catch {
     offlineBuildingSource = null
+    layerRenderKey = ""
+    renderLayers()
   }
 }
 
@@ -452,6 +459,8 @@ function renderLayers() {
     props.region,
     (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
   )
+  const offlineBuildingFeatureCount = offlineBuildingSource?.entities.values.filter((entity) => Boolean(entity.polygon)).length ?? 0
+  const hasExternalBuildingFeatures = hasRenderableOfflineBuildingFeatures(offlineBuildingFeatureCount)
   for (const layer of props.region.layers) {
     if (!visible.has(layer.code) || layer.state === "UNAVAILABLE") continue
     if (!renderBuildingDetail && layer.code === "BUILDINGS") continue
@@ -460,7 +469,7 @@ function renderLayers() {
       // polygons for validation. The real light-gray building layer is loaded
       // from the package BUILDINGS GeoJSON below; do not render those legacy
       // dark block polygons a second time.
-      if (layer.code === "BUILDINGS" && configuredBuildingsUrl && feature.properties?.category === "BUILDING") continue
+      if (layer.code === "BUILDINGS" && hasExternalBuildingFeatures && configuredBuildingsUrl && feature.properties?.category === "BUILDING") continue
       addFeature(layer.code, feature, renderedFeatureIds)
     }
   }
