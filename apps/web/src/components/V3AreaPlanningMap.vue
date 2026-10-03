@@ -132,6 +132,8 @@ async function reloadMapResources() {
 onMounted(async () => {
   if (!container.value) return
   window.addEventListener("keydown", handleKeyDown)
+  window.addEventListener("pointerup", handleGlobalPointerUp)
+  window.addEventListener("blur", handleGlobalPointerUp)
   viewer = createUnifiedCesiumViewer(container.value)
   scaleViewer.value = viewer
   viewerReady.value = true
@@ -158,6 +160,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleKeyDown)
+  window.removeEventListener("pointerup", handleGlobalPointerUp)
+  window.removeEventListener("blur", handleGlobalPointerUp)
   viewerReady.value = false
   mapResourceGeneration += 1
   removePerformanceTuning?.()
@@ -195,7 +199,7 @@ watch(() => props.selectedAnnotationId, renderPlan)
 watch(() => props.measurement, renderInteraction, { deep: true })
 watch(() => props.editMode, renderPlan)
 watch(() => props.mode, (mode) => setMode(mode, false))
-watch(() => [props.drawMode, props.drawType, props.toolMode], resetDrawing)
+watch(() => [props.drawMode, props.drawType, props.toolMode, props.editMode], () => { endDrag(); resetDrawing() })
 
 function configureInteractions() {
   if (!viewer) return
@@ -209,10 +213,22 @@ function configureInteractions() {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.key !== "Escape" || (!props.drawMode && !props.toolMode)) return
+  if (event.key !== "Escape") return
+  if (draggedVertex || movedFeature) {
+    event.preventDefault()
+    endDrag()
+    emit("interactionCancel")
+    return
+  }
+  if (!props.drawMode && !props.toolMode) return
   event.preventDefault()
   resetDrawing()
   emit("interactionCancel")
+}
+
+/** Restore camera controls when a vertex/feature drag ends outside the map. */
+function handleGlobalPointerUp() {
+  if (draggedVertex || movedFeature) endDrag()
 }
 
 function handleClick(position: Cartesian2) {
