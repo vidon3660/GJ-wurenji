@@ -234,7 +234,7 @@ export function projectLogisticsRuntimePlayback(
     return {
       ...task,
       status,
-      activeRouteId: activeRouteIdAt(task, status, preserveOperationalState),
+      activeRouteId: activeRouteIdAt(task, status, routeMap),
       position,
       speedMps: playbackSpeedMps(task, status, routeMap, preserveOperationalState),
       batteryPercent: round(100 - (100 - Math.min(100, task.batteryPercent)) * missionProgress, 1)
@@ -404,7 +404,14 @@ function logisticsTaskPosition(
 ): V3Coordinate {
   const outbound = routeCoordinates(routeMap.get(task.outboundRouteId))
   const returning = routeCoordinates(routeMap.get(task.returnRouteId))
-  const active = preserveOperationalState && task.activeRouteId ? routeCoordinates(routeMap.get(task.activeRouteId)) : []
+  // The authoritative task snapshot carries the route selected by runtime actions
+  // (for example a verified alternate). Keep that route during interpolation so
+  // replay does not jump back to the primary geometry when reconstructing a frame.
+  const activeRoute = task.activeRouteId ? routeMap.get(task.activeRouteId) : undefined
+  const active = activeRoute && ((status === "TAKEOFF" || status === "OUTBOUND") && activeRoute.direction === "OUTBOUND"
+    || (status === "RETURNING" || status === "LANDING") && activeRoute.direction === "RETURN")
+    ? routeCoordinates(activeRoute)
+    : []
   if (status === "TAKEOFF" || status === "OUTBOUND") return interpolateRoute(active.length > 0 ? active : outbound, progressBetween(timeMs, task.plannedTakeoffTimeMs, task.arrivalTimeMs))
   if (status === "ARRIVAL_CONFIRMATION") return outbound.at(-1) ?? returning[0] ?? task.position
   if (status === "RETURNING" || status === "LANDING") return interpolateRoute(active.length > 0 ? active : returning, progressBetween(timeMs, task.returnStartTimeMs, task.landingTimeMs))
@@ -412,8 +419,15 @@ function logisticsTaskPosition(
   return outbound[0] ?? returning.at(-1) ?? task.position
 }
 
-function activeRouteIdAt(task: LogisticsRuntimeTaskView, status: LogisticsRuntimeTaskStatus, preserveOperationalState: boolean): string | null {
-  if (preserveOperationalState && task.activeRouteId) return task.activeRouteId
+function activeRouteIdAt(
+  task: LogisticsRuntimeTaskView,
+  status: LogisticsRuntimeTaskStatus,
+  routeMap: Map<string, LogisticsRuntimeRouteView>
+): string | null {
+  const expectedDirection = status === "TAKEOFF" || status === "OUTBOUND" ? "OUTBOUND"
+    : status === "RETURNING" || status === "LANDING" ? "RETURN"
+      : null
+  if (expectedDirection && task.activeRouteId && routeMap.get(task.activeRouteId)?.direction === expectedDirection) return task.activeRouteId
   if (status === "TAKEOFF" || status === "OUTBOUND") return task.outboundRouteId
   if (status === "RETURNING" || status === "LANDING") return task.returnRouteId
   return null
@@ -421,7 +435,13 @@ function activeRouteIdAt(task: LogisticsRuntimeTaskView, status: LogisticsRuntim
 
 function playbackSpeedMps(task: LogisticsRuntimeTaskView, status: LogisticsRuntimeTaskStatus, routeMap: Map<string, LogisticsRuntimeRouteView>, preserveOperationalState: boolean): number {
   if (preserveOperationalState && Number.isFinite(task.speedMps)) return task.speedMps
-  const routeId = status === "TAKEOFF" || status === "OUTBOUND" ? task.outboundRouteId : status === "RETURNING" || status === "LANDING" ? task.returnRouteId : null
+  const expectedDirection = status === "TAKEOFF" || status === "OUTBOUND" ? "OUTBOUND"
+    : status === "RETURNING" || status === "LANDING" ? "RETURN"
+      : null
+  const activeRoute = task.activeRouteId ? routeMap.get(task.activeRouteId) : undefined
+  const routeId = expectedDirection && activeRoute?.direction === expectedDirection
+    ? task.activeRouteId
+    : expectedDirection === "OUTBOUND" ? task.outboundRouteId : expectedDirection === "RETURN" ? task.returnRouteId : null
   if (!routeId) return 0
   const points = routeCoordinates(routeMap.get(routeId))
   const duration = status === "TAKEOFF" || status === "OUTBOUND"
