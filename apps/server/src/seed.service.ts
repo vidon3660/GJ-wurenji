@@ -536,7 +536,9 @@ function createRegionManifest(
       imagery: {
         provider: "SINGLE_TILE",
         url: "/map/logistics/gd-north-core-orthophoto.jpg",
-        version: "17.0.0",
+        // The repository ships a deterministic teaching fallback. Replace it
+        // with the formal L17 package and its checksum before production use.
+        version: "demo-1.0.0",
         sha256: "5a26913d4beff3e5b696fbdb317ac177533c3c93a124b651d9cf5e0e8dd94721",
         extent: GD_NORTH_OFFLINE_EXTENT
       }
