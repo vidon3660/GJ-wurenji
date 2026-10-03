@@ -8,6 +8,11 @@ describe("questionnaire structured answer form", () => {
     expect(questionFieldLabel("assignments")).toBe("订单分配")
     expect(questionFieldLabel("conflictCheck")).toBe("冲突检查")
     expect(questionFieldLabel("fallback")).toBe("备选方案")
+    expect(questionFieldLabel("trajectoryPlan")).toBe("舞步轨迹")
+    expect(questionFieldLabel("taskOrder")).toBe("任务点顺序")
+    expect(questionFieldLabel("divertAction")).toBe("备降动作")
+    expect(questionFieldLabel("eventAssessment")).toBe("事件评估")
+    expect(questionFieldLabel("actionPlan")).toBe("处置方案")
     expect(questionFieldLabel("customField")).toBe("customField")
   })
 
