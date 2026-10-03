@@ -57,6 +57,7 @@ import { isSelectedLogisticsRouteEntity, logisticsFocusCoordinates, logisticsNod
 import { createV3MapDataStateTracker, type V3MapDataState, type V3MapDataStateTracker, type V3MapImageryState } from "../map-loading-state"
 import { regionMapResourceKey } from "../map-resources"
 import { loadV3MapResources } from "../map-resources-loader"
+import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
 import { captureV3Camera, focusV3Coordinates, focusV3Region, isCoordinateInsideRegion, regionMaskHierarchy, restoreV3Camera } from "../map-region-constraints"
 import { resetV3CameraNorth, rotateV3Camera, setV3CameraPreset, zoomV3Camera } from "../map-region-constraints"
 import type { RegionTerrainState } from "../terrain"
@@ -245,11 +246,11 @@ async function loadOfflineLogisticsResources() {
   offlineBuildingHeights.clear()
   if (!viewer || viewer.isDestroyed()) return
   // 提供的 L17/建筑数据覆盖广州北部教学区；其他预设区域继续使用其自身资源，避免错位叠加。
-  const center = props.region.center
-  if (center.longitude < 113.10 || center.longitude > 113.50 || center.latitude < 22.95 || center.latitude > 23.20) return
-  const buildingsUrl = ((import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined)
-    ?? props.region.layers.find((layer) => layer.code === "BUILDINGS")?.dataUrl
-    ?? "/map/logistics/gd-north-core-buildings.geojson").trim()
+  const buildingsUrl = resolveBuildingDataUrl(
+    props.region,
+    (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
+  )
+  if (!buildingsUrl) return
   try {
     const source = await GeoJsonDataSource.load(buildingsUrl, { clampToGround: false })
     if (!viewer || viewer.isDestroyed() || generation !== offlineBuildingGeneration) {
@@ -259,10 +260,7 @@ async function loadOfflineLogisticsResources() {
     for (const entity of source.entities.values) {
       if (!entity.polygon) continue
       const rawHeight = entity.properties?.height?.getValue(JulianDate.now())
-      const seed = stableBuildingSeed(entity.id)
-      const heightMeters = Number.isFinite(Number(rawHeight)) && Number(rawHeight) > 0
-        ? Number(rawHeight)
-        : 8 + (seed % 35)
+      const heightMeters = buildingHeightMeters(rawHeight, String(entity.id))
       offlineBuildingHeights.set(String(entity.id), heightMeters)
       entity.name = entity.name || `离线建筑 ${entity.id}`
       entity.polygon.height = new ConstantProperty(0)
@@ -290,12 +288,6 @@ function syncOfflineBuildingVisibility() {
       entity.polygon.extrudedHeight = new ConstantProperty(props.mode === "3d" ? heightMeters : 0)
     }
   }
-}
-
-function stableBuildingSeed(value: string): number {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619)
-  return Math.abs(hash >>> 0)
 }
 
 watch(() => props.region, renderAll, { deep: true })
