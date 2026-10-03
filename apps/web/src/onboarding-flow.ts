@@ -7,6 +7,21 @@ export interface OnboardingMission {
   sceneType: SceneType | null
 }
 
+export function shouldShowOnboardingGuide(context: {
+  completed: boolean
+  hasMission: boolean
+  inWorkspace: boolean
+  isTeacher: boolean
+  studentProjectId: string | null
+  deferred: boolean
+  deferredProjectId: string | null
+}): boolean {
+  if (context.completed || context.hasMission || context.inWorkspace) return false
+  if (!context.isTeacher && !context.studentProjectId) return false
+  if (context.deferred && (context.isTeacher || context.deferredProjectId === context.studentProjectId)) return false
+  return true
+}
+
 interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
@@ -63,6 +78,10 @@ function onboardingStorageKey(userId: string, state: OnboardingState, suffix: st
   return `wurenji:onboarding:${userId}:${state.guideKey}:v${state.version}:${suffix}`
 }
 
+function parseSceneType(value: unknown): SceneType | null {
+  return value === "CITY_SHOW" || value === "CITY_LOGISTICS" || value === "VTOL_INSPECTION" ? value : null
+}
+
 export function loadOnboardingStep(storage: StorageLike, userId: string, state: OnboardingState, stepCount: number): number {
   const value = Number(read(storage, onboardingStorageKey(userId, state, "step")))
   return Number.isInteger(value) && value >= 0 && value < stepCount ? value : 0
@@ -87,7 +106,7 @@ export function loadOnboardingMission(storage: StorageLike, userId: string, stat
   try {
     const value = JSON.parse(serialized) as Partial<OnboardingMission>
     if (value.action !== "teacher-first-assignment" && value.action !== "student-first-stage") return null
-    return { action: value.action, sceneType: value.sceneType ?? null }
+    return { action: value.action, sceneType: parseSceneType(value.sceneType) }
   } catch {
     return null
   }
