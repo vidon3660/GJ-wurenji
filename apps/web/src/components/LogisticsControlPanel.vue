@@ -463,4 +463,22 @@ function statusClass(status: FlightMissionStatus) {
     padding: 0 4px;
   }
 }
+
+
+@media (max-width: 760px) {
+  .logistics-control-panel { right: 8px; bottom: 72px; left: 8px; height: 206px; }
+  .mission-card { min-width: 300px; }
+}
+@media (max-width: 420px) {
+  .logistics-control-panel { right: 5px; bottom: 58px; left: 5px; height: 198px; }
+  .logistics-control-panel > header { grid-template-columns: 30px minmax(0, 1fr) 30px; min-height: 46px; padding: 0 6px; }
+  .control-title > span { width: 26px; height: 26px; }
+  .control-title div { display: none; }
+  .logistics-control-panel nav { gap: 0; overflow-x: auto; justify-content: flex-end; }
+  .logistics-control-panel nav button { min-width: 54px; padding: 0 3px; }
+  .control-body { height: 152px; padding: 8px; }
+  .mission-card { flex-basis: 280px; min-width: 280px; grid-template-columns: 24px minmax(0, 1fr) auto; padding: 9px; }
+  .mission-status { white-space: normal; }
+}
+
 </style>

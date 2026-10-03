@@ -123,4 +123,15 @@ function formatDuration(milliseconds: number) {
   .runtime-playback-bar em { display: block; min-width: 0; }
   .playback-mode { display: none; }
 }
+
+@media (max-width: 480px) {
+  .runtime-playback-bar { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto auto; gap: 5px 6px; padding: 6px; }
+  .playback-actions { grid-column: 1 / -1; grid-row: 1; }
+  .playback-time { grid-column: 1; grid-row: 2; }
+  .playback-track { grid-column: 2; grid-row: 2; min-width: 0; }
+  .playback-duration { grid-column: 3; grid-row: 2; }
+  .runtime-playback-bar select { grid-column: 1; grid-row: 3; width: 52px; }
+  .runtime-playback-bar em { grid-column: 2 / 4; grid-row: 3; text-align: left; }
+}
+
 </style>

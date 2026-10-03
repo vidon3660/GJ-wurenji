@@ -32,4 +32,25 @@ describe("onboarding flow", () => {
     expect(loadOnboardingStep(storage, "student-1", state, 4)).toBe(0)
     expect(loadOnboardingMission(storage, "student-1", state)).toBeNull()
   })
+
+  it("keeps the guide usable when browser storage throws", () => {
+    const unavailableStorage = {
+      getItem: () => { throw new Error("storage blocked") },
+      setItem: () => { throw new Error("storage blocked") },
+      removeItem: () => { throw new Error("storage blocked") }
+    }
+    expect(() => saveOnboardingStep(unavailableStorage, "student-1", state, 1)).not.toThrow()
+    expect(() => saveOnboardingMission(unavailableStorage, "student-1", state, { action: "student-first-stage", sceneType: null })).not.toThrow()
+    expect(loadOnboardingStep(unavailableStorage, "student-1", state, 4)).toBe(0)
+    expect(loadOnboardingMission(unavailableStorage, "student-1", state)).toBeNull()
+    expect(() => clearOnboardingProgress(unavailableStorage, "student-1", state)).not.toThrow()
+  })
+
+  it("does not mix progress between accounts", () => {
+    const storage = memoryStorage()
+    saveOnboardingStep(storage, "teacher-1", state, 2)
+    saveOnboardingStep(storage, "teacher-2", state, 1)
+    expect(loadOnboardingStep(storage, "teacher-1", state, 4)).toBe(2)
+    expect(loadOnboardingStep(storage, "teacher-2", state, 4)).toBe(1)
+  })
 })

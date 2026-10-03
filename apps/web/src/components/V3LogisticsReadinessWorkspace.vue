@@ -148,7 +148,7 @@ function checkStatusLabel(value: string) {
 <template>
   <section class="logistics-readiness-workspace" v-loading="loading">
     <header class="readiness-header">
-      <div><span>OPERATION READINESS</span><h2>配送运行准备</h2><p>基于正式航线、订单、机队和初始调度执行权威复核</p></div>
+      <div><h2>配送运行准备</h2><p>基于正式航线、订单、机队和初始调度执行权威复核</p></div>
       <dl><div><dt>通过</dt><dd>{{ passCount }}</dd></div><div><dt>关注</dt><dd class="warning">{{ warningCount }}</dd></div><div><dt>阻断</dt><dd class="danger">{{ failCount }}</dd></div><div><dt>调度版本</dt><dd>V{{ workspace?.submittedSchedule.versionNo ?? '-' }}</dd></div></dl>
       <el-button :icon="Refresh" circle title="刷新运行准备" @click="loadWorkspace" />
     </header>
@@ -197,4 +197,26 @@ function checkStatusLabel(value: string) {
 .readiness-decision-error { display: grid; place-items: center; }.readiness-decision-error > div { border-left: 3px solid #b05a45; padding: 14px; color: #653b31; background: #fff4f1; }.readiness-decision-error .el-button { margin-top: 8px; }
 @media (max-width: 980px) { .readiness-header dl { display: none; } }
 @media (max-width: 760px) { .logistics-readiness-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-columns: 1fr; grid-template-rows: auto 620px auto; }.readiness-header { grid-column: 1; grid-template-columns: 1fr 36px; }.readiness-decision { border-top: 1px solid #d1dbd6; border-left: 0; }.readiness-checks article { grid-template-columns: 20px minmax(120px,1fr) 42px; }.readiness-checks article > span { display: none; }.readiness-load-error { align-items: stretch; flex-direction: column; }.readiness-load-error-full { margin: 12px; } }
+
+@media (max-width: 900px) {
+  .logistics-readiness-workspace { grid-column: 2 / 4; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(320px, 1fr) auto; overflow: auto; }
+  .readiness-header { grid-column: 1; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .readiness-header dl { display: none; }
+  .readiness-checks { grid-column: 1; grid-row: 2; }
+  .readiness-decision { grid-column: 1; grid-row: 3; border-top: 1px solid #d1dbd6; border-left: 0; }
+}
+@media (max-width: 760px) {
+  .logistics-readiness-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-rows: auto minmax(300px, 1fr) auto; }
+  .readiness-header { padding: 10px 12px; }
+  .readiness-header p { display: none; }
+  .readiness-checks { padding: 10px 9px 16px; }
+  .readiness-checks article { grid-template-columns: 20px minmax(0, 1fr) auto; gap: 7px; }
+  .readiness-checks article > span { display: none; }
+}
+@media (max-width: 420px) {
+  .readiness-decision { padding: 12px; }
+  .readiness-decision footer { grid-template-columns: 1fr; }
+  .readiness-decision footer .el-button:last-child { grid-column: 1; }
+}
+
 </style>

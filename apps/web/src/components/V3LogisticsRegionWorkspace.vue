@@ -243,7 +243,7 @@ function focusElement(element: (typeof regionElements.value)[number]) {
     <aside v-if="workspace || !loadError" class="logistics-region-inspector">
       <div v-if="loadError && workspace" class="logistics-region-sync-error" role="alert" aria-live="assertive"><span><strong>区域分析同步失败</strong><small>{{ loadError }}</small><p>当前已保留原有选择，可继续查看；保存或确认前请先重试同步。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" @click="loadWorkspace">重试同步</el-button></div>
       <header>
-        <div><span>REGION ANALYSIS</span><strong>物流区域分析</strong></div>
+        <div><strong>物流区域分析</strong></div>
         <p><b>{{ selectedDeliveryPointIds.length }}</b> / {{ range.minimum }}–{{ range.maximum }}</p>
       </header>
 
@@ -327,4 +327,21 @@ function focusElement(element: (typeof regionElements.value)[number]) {
 @media (max-width: 760px) { .logistics-region-load-error { inset: 12px; align-items: stretch; flex-direction: column; justify-content: center; } .logistics-region-sync-error { align-items: stretch; flex-direction: column; } }
 @media (max-width: 1080px) { .logistics-region-workspace { grid-template-columns: minmax(0,1fr) 310px; }.delivery-selection > div { grid-template-columns: 1fr; }.delivery-selection button { border-right: 0; } }
 @media (max-width: 760px) { .logistics-region-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-columns: 1fr; grid-template-rows: 520px auto; }.logistics-region-inspector { overflow: visible; border-top: 1px solid #ccd7d2; border-left: 0; }.delivery-selection > div { grid-template-columns: 1fr 1fr; }.delivery-selection button:nth-child(odd) { border-right: 1px solid #e0e7e3; } }
+
+@media (max-width: 920px) {
+  .logistics-region-workspace { grid-column: 2 / 4; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(360px, 50vh) auto; overflow: auto; }
+  .logistics-region-inspector { border-top: 1px solid #ccd7d2; border-left: 0; overflow: visible; }
+  .delivery-selection > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .logistics-region-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-rows: minmax(300px, 52vh) auto; }
+  .logistics-map-legend { top: 8px; left: 8px; gap: 5px 9px; max-width: calc(100% - 16px); }
+  .logistics-region-caption { right: 8px; bottom: 8px; left: 8px; }
+}
+@media (max-width: 420px) {
+  .logistics-region-workspace { grid-template-rows: 280px auto; }
+  .delivery-selection > div { grid-template-columns: 1fr; }
+  .delivery-selection button, .delivery-selection button:nth-child(odd) { border-right: 0; }
+}
+
 </style>

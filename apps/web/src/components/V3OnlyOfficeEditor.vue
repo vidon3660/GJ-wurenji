@@ -59,4 +59,17 @@ function loadOnlyOfficeScript(source: string): Promise<void> {
 <style scoped>
 .onlyoffice-host,
 .onlyoffice-host > div { width: 100%; height: 100%; min-height: 0; }
+
+
+.onlyoffice-host { min-width: 0; min-height: 280px; overflow: hidden; }
+.onlyoffice-host > div { min-width: 0; min-height: 280px; }
+@media (max-width: 760px) {
+  .onlyoffice-host,
+  .onlyoffice-host > div { min-height: 420px; }
+}
+@media (max-width: 420px) {
+  .onlyoffice-host,
+  .onlyoffice-host > div { min-height: 360px; }
+}
+
 </style>

@@ -203,3 +203,7 @@ VITE_ENABLE_OSM_BUILDINGS=true
 ## MVP 边界
 
 本版本面向教学试点，不包含真机/飞控接入、高精度动力学、复杂气象场、自动最优调度、微服务或千机仿真。生产部署必须修改 `JWT_SECRET`，并在 HTTPS 网关后设置 `COOKIE_SECURE=true`；TypeORM `synchronize` 仅用于 MVP，正式维护数据后应改用迁移脚本。
+
+## 文档导航
+
+当前文档入口见 [`docs/README.md`](docs/README.md)。仓库保留需求、架构、操作手册、地图资源和验收文档；历史交接稿与重复优化任务书已清理。

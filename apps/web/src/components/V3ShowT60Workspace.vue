@@ -258,4 +258,17 @@ function environmentValueLabel(value: string | number | boolean) {
 .submission-record dd { overflow-wrap: anywhere; }
 @media (max-width: 900px) { .confirmation-grid dl { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .t60-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-columns: 1fr; grid-template-rows: auto 620px auto; } .t60-workspace > header { grid-column: 1; } .t60-workspace > aside { border-top: 1px solid #d3ddd8; border-left: 0; } .t60-load-error { align-items: stretch; flex-direction: column; } .t60-load-error-full { margin: 12px; } }
+
+@media (max-width: 760px) {
+  .t60-workspace { display: flex; grid-column: 1; grid-row: 3 / 5; min-height: 0; overflow: auto; flex-direction: column; }
+  .t60-workspace > header { flex: 0 0 auto; }
+  .t60-workspace > main { flex: 1 1 auto; min-height: 520px; padding: 18px 12px; }
+  .t60-workspace > aside { flex: 0 0 auto; border-top: 1px solid #d3ddd8; border-left: 0; }
+}
+@media (max-width: 420px) {
+  .t60-workspace > header { align-items: flex-start; flex-direction: column; gap: 9px; padding: 12px; }
+  .clock-panel > strong { font-size: clamp(42px, 18vw, 60px); }
+  .clock-track { width: 100%; }
+  .confirmation-grid dl > div { grid-template-columns: 74px minmax(0, 1fr); gap: 7px; padding: 9px; }
+}
 </style>

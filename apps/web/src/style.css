@@ -4088,9 +4088,36 @@ button:active:not(:disabled),
 }
 
 .onboarding-layout > aside {
+  position: relative;
   padding: 30px 22px;
   color: white;
   background: #173f32;
+}
+
+.onboarding-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 0;
+  padding: 4px 6px;
+  color: #c8ddd4;
+  font-size: 11px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.onboarding-close:hover {
+  color: white;
+}
+
+.onboarding-close:focus-visible {
+  outline: 2px solid #9fe0be;
+  outline-offset: 2px;
+}
+
+.onboarding-close:disabled {
+  cursor: not-allowed;
+  opacity: .62;
 }
 
 .onboarding-count {
@@ -9950,4 +9977,131 @@ select:focus-visible,
   .v3-home-metrics.teacher-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .student-scene-cards, .teacher-entry-cards { grid-template-columns: 1fr; }
   .assignment-library-page .assignment-filter-toolbar { grid-template-columns: 1fr; }
+}
+
+/* Small-screen shell: keep every destination reachable without squeezing the
+ * content into a desktop sidebar.  The navigation becomes an independently
+ * scrollable bottom rail; work pages retain their controls and scroll within
+ * the content area. */
+@media (max-width: 640px) {
+  .platform-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58px minmax(0, 1fr) auto;
+  }
+
+  .platform-header {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+
+  .platform-brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .platform-brand > div,
+  .platform-context {
+    display: none;
+  }
+
+  .platform-actions {
+    min-width: 0;
+    gap: 2px;
+    padding-right: 6px;
+  }
+
+  .platform-nav {
+    grid-column: 1;
+    grid-row: 3;
+    display: block;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid rgba(217, 227, 222, .18);
+    border-right: 0;
+    padding: 5px 7px 7px;
+    scrollbar-width: none;
+  }
+
+  .platform-nav::-webkit-scrollbar { display: none; }
+  .platform-nav nav { display: flex; gap: 4px; width: max-content; min-width: 100%; }
+  .platform-nav nav button {
+    grid-template-columns: 1fr;
+    grid-template-rows: 20px 15px;
+    flex: 0 0 auto;
+    min-width: 72px;
+    min-height: 42px;
+    gap: 1px;
+    justify-items: center;
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  .platform-nav nav button .el-icon { font-size: 17px; }
+  .platform-nav nav button span { display: block; overflow: hidden; max-width: 9em; text-overflow: ellipsis; white-space: nowrap; }
+  .platform-nav nav .nav-sub-item { min-width: 92px; margin-left: 0; border-left: 0; padding-left: 6px; }
+  .nav-group { display: flex; gap: 4px; }
+  .nav-status { display: none; }
+
+  .platform-content { grid-column: 1; grid-row: 2; min-height: 0; }
+  .education-page { padding: 18px 14px 30px; }
+  .page-heading { align-items: flex-start; min-height: 0; margin-bottom: 14px; }
+  .page-heading h1 { font-size: 21px; }
+  .heading-actions,
+  .resource-heading-actions,
+  .question-bank-actions { flex-wrap: wrap; width: 100%; }
+  .heading-actions .el-button,
+  .resource-heading-actions .el-button,
+  .question-bank-actions .el-button { flex: 1 1 120px; min-width: 0; }
+
+  .resource-page-heading,
+  .question-bank-page-header { gap: 12px; }
+  .resource-page-heading p,
+  .question-bank-page-header p { display: none; }
+
+  .resource-management-layout { margin-top: 14px; }
+  .resource-summary-band { margin-inline: -1px; }
+  .resource-summary-band > div { min-height: 70px; padding: 12px 11px; }
+  .resource-summary-band strong { font-size: 20px; }
+  .resource-list-toolbar { align-items: stretch; flex-direction: column; }
+  .resource-list-toolbar > div { width: 100%; }
+  .resource-list-toolbar .el-select { flex: 1; width: auto; min-width: 0; }
+  .resource-detail-header { align-items: flex-start; flex-direction: column; }
+  .resource-facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .resource-check-list { grid-template-columns: 1fr; }
+  .resource-check-list > div:nth-child(odd) { border-right: 0; }
+
+  .progress-filter-band { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px 0; }
+  .progress-focus-filters { overflow-x: auto; }
+  .progress-filter-band .el-checkbox { justify-self: start; }
+
+  .class-layout { min-height: 0; }
+  .class-list { max-height: 190px; }
+  .class-detail { padding-right: 0; padding-left: 0; }
+  .class-detail > header { margin-inline: 0; padding-inline: 0; }
+  .class-detail > header .heading-actions { width: 100%; }
+  .class-detail > header .heading-actions .el-button { flex: 1 1 120px; }
+  .class-view-tabs { margin-right: 0; margin-left: 0; }
+  .class-stat-grid { gap: 7px; }
+  .detail-fact-grid,
+  .detail-summary-grid { gap: 7px; }
+
+  .login-page { grid-template-rows: minmax(230px, 30dvh) minmax(0, 1fr); }
+  .login-visual { min-height: 230px; }
+  .login-panel { padding: 22px 14px 34px; }
+  .login-form { padding: 24px 18px; }
+  .login-form h1 { font-size: 26px; }
+  .demo-actions { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 380px) {
+  .platform-header { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .platform-brand > span { width: 28px; height: 28px; font-size: 11px; }
+  .platform-actions > button:not(.el-button) { width: 30px; height: 30px; }
+  .platform-user { min-width: 34px; padding-left: 4px; }
+  .education-page { padding-inline: 10px; }
+  .class-stat-grid,
+  .detail-fact-grid,
+  .detail-summary-grid,
+  .resource-summary-band { grid-template-columns: 1fr 1fr; }
+  .resource-detail-section { padding-inline: 12px; }
+  .login-form { padding-inline: 14px; }
 }

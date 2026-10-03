@@ -4,13 +4,14 @@ import { ElMessage } from "element-plus"
 import { Bell, Collection, DataAnalysis, MapLocation, Promotion, User } from "@element-plus/icons-vue"
 import type { AuthUser, OnboardingState, SceneType } from "@wurenji/shared"
 import { api } from "../api"
-import { clearOnboardingProgress, loadOnboardingStep, saveOnboardingStep, type OnboardingAction } from "../onboarding-flow"
+import { clearOnboardingProgress, getOnboardingStorage, loadOnboardingStep, saveOnboardingStep, type OnboardingAction } from "../onboarding-flow"
 
-const props = defineProps<{ user: AuthUser; state: OnboardingState; studentSceneType?: SceneType | null }>()
+const props = defineProps<{ user: AuthUser; state: OnboardingState; studentSceneType?: SceneType | null; studentHasProject?: boolean }>()
 const emit = defineEmits<{ done: []; later: []; start: [action: OnboardingAction, sceneType: SceneType | null] }>()
 const activeStep = ref(0)
 const saving = ref(false)
 const selectedSceneType = ref<SceneType>(props.studentSceneType ?? "CITY_SHOW")
+const storage = getOnboardingStorage()
 
 const teacherSteps = [
   { title: "选择教学场景", text: "先确定本次教学目标。表演关注编队与时序，物流关注订单与调度，垂起关注航线、能源和巡检安全。", icon: Collection },
@@ -28,12 +29,13 @@ const studentSteps = [
 
 const steps = computed(() => props.user.role === "student" ? studentSteps : teacherSteps)
 const selectedSceneLabel = computed(() => ({ CITY_SHOW: "城市表演", CITY_LOGISTICS: "城市物流", VTOL_INSPECTION: "垂起巡检" } as Record<SceneType, string>)[selectedSceneType.value])
+const canStartOperation = computed(() => props.user.role !== "student" || props.studentHasProject !== false)
 
 onMounted(() => {
-  activeStep.value = loadOnboardingStep(localStorage, props.user.id, props.state, steps.value.length)
+  activeStep.value = loadOnboardingStep(storage, props.user.id, props.state, steps.value.length)
 })
 
-watch(activeStep, (step) => saveOnboardingStep(localStorage, props.user.id, props.state, step))
+watch(activeStep, (step) => saveOnboardingStep(storage, props.user.id, props.state, step))
 
 async function skipGuide() {
   saving.value = true
@@ -42,7 +44,7 @@ async function skipGuide() {
       method: "POST",
       body: JSON.stringify({ version: props.state.version, skipped: true })
     })
-    clearOnboardingProgress(localStorage, props.user.id, props.state)
+    clearOnboardingProgress(storage, props.user.id, props.state)
     emit("done")
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "引导状态保存失败")
@@ -52,22 +54,23 @@ async function skipGuide() {
 }
 
 function continueLater() {
-  saveOnboardingStep(localStorage, props.user.id, props.state, activeStep.value)
+  saveOnboardingStep(storage, props.user.id, props.state, activeStep.value)
   emit("later")
 }
 
 function startOperation() {
   const action = steps.value[activeStep.value]?.action
   if (!action) return
-  saveOnboardingStep(localStorage, props.user.id, props.state, activeStep.value)
+  saveOnboardingStep(storage, props.user.id, props.state, activeStep.value)
   emit("start", action.target, props.user.role === "student" ? props.studentSceneType ?? null : selectedSceneType.value)
 }
 </script>
 
 <template>
-  <el-dialog class="onboarding-dialog" :model-value="true" :title="user.role === 'student' ? '学生首次引导' : '教师首次引导'" :aria-label="user.role === 'student' ? '学生首次引导' : '教师首次引导'" width="680px" :show-close="false" :close-on-click-modal="false" :close-on-press-escape="false">
+  <el-dialog class="onboarding-dialog" :model-value="true" :title="user.role === 'student' ? '学生首次引导' : '教师首次引导'" :aria-label="user.role === 'student' ? '学生首次引导' : '教师首次引导'" width="680px" :show-close="false" :close-on-click-modal="false" :close-on-press-escape="false" @keydown.esc="continueLater">
     <div class="onboarding-layout">
       <aside>
+        <button type="button" class="onboarding-close" aria-label="关闭引导" :disabled="saving" @click="continueLater">关闭</button>
         <span class="onboarding-count" aria-live="polite">{{ String(activeStep + 1).padStart(2, '0') }}</span>
         <strong>{{ user.role === 'student' ? '学生首次引导' : '教师首次引导' }}</strong>
         <span class="onboarding-progress">第 {{ activeStep + 1 }} 步，共 {{ steps.length }} 步</span>
@@ -91,7 +94,7 @@ function startOperation() {
           <span />
           <el-button v-if="activeStep > 0" @click="activeStep -= 1">上一步</el-button>
           <el-button v-if="activeStep < steps.length - 1" type="primary" @click="activeStep += 1">下一步</el-button>
-          <el-button v-else type="primary" :loading="saving" @click="startOperation">{{ steps[activeStep]?.action?.label }}</el-button>
+          <el-button v-else type="primary" :loading="saving" :disabled="!canStartOperation" @click="startOperation">{{ canStartOperation ? steps[activeStep]?.action?.label : '等待教师分配' }}</el-button>
         </footer>
       </section>
     </div>

@@ -6,7 +6,7 @@ import type { AssignmentDraftStatus, AuthUser, ClassroomSummary, OnboardingState
 import { api } from "../api"
 import { clearWorkspaceResumeTarget, loadWorkspaceResumeTarget, saveWorkspaceResumeTarget } from "../workspace-resume"
 import { teacherMetricNavigation } from "../teacher-progress"
-import { clearOnboardingMission, clearOnboardingProgress, loadOnboardingMission, saveOnboardingMission, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
+import { clearOnboardingMission, clearOnboardingProgress, getOnboardingStorage, loadOnboardingMission, saveOnboardingMission, type OnboardingAction, type OnboardingMission } from "../onboarding-flow"
 import EducationHomeView from "./EducationHomeView.vue"
 import { defineAsyncComponentWithLoading } from "../async-component"
 
@@ -35,6 +35,7 @@ const showGuide = ref(false)
 const onboardingMission = ref<OnboardingMission | null>(null)
 const onboardingMissionSaving = ref(false)
 const guidedSceneType = ref<SceneType | null>(null)
+const onboardingStorage = getOnboardingStorage()
 const showAssignmentWizard = ref(false)
 const assignmentWizardKey = ref(0)
 const wizardSceneType = ref<SceneType>("CITY_SHOW")
@@ -94,10 +95,10 @@ onMounted(async () => {
   await restoreWorkspace()
   try {
     onboarding.value = await api<OnboardingState>("/v1/education/onboarding")
-    if (onboarding.value.completed) clearOnboardingProgress(localStorage, props.user.id, onboarding.value)
-    else onboardingMission.value = loadOnboardingMission(localStorage, props.user.id, onboarding.value)
+    if (onboarding.value.completed) clearOnboardingProgress(onboardingStorage, props.user.id, onboarding.value)
+    else onboardingMission.value = loadOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
     guidedSceneType.value = onboardingMission.value?.sceneType ?? null
-    showGuide.value = !onboarding.value.completed && !onboardingMission.value
+    syncOnboardingGuide()
   } catch {
   }
 })
@@ -146,6 +147,7 @@ async function reloadV3(includeInternalData = isTeacher.value ? includeInternalT
       if (generation !== v3ReloadGeneration) return
       studentProjects.value = value
     }
+    syncOnboardingGuide()
   } catch (error) {
     if (generation !== v3ReloadGeneration) return
     v3Error.value = error instanceof Error ? error.message : "教学任务数据加载失败"
@@ -221,6 +223,16 @@ function openV3Project(projectId: string, alertId?: string) {
   saveWorkspaceResumeTarget(localStorage, props.user.id, projectId)
 }
 
+function syncOnboardingGuide() {
+  if (!onboarding.value || onboarding.value.completed || onboardingMission.value) {
+    showGuide.value = false
+    return
+  }
+  // Students first need an assigned project. Showing an empty guide before
+  // that point creates a dead end and makes the home screen feel unfinished.
+  showGuide.value = isTeacher.value || Boolean(onboardingStudentProject.value)
+}
+
 async function restoreWorkspace() {
   const target = loadWorkspaceResumeTarget(localStorage, props.user.id)
   if (!target) return
@@ -273,7 +285,11 @@ function startGuideMission(action: OnboardingAction, sceneType: SceneType | null
   const mission = { action, sceneType }
   onboardingMission.value = mission
   guidedSceneType.value = sceneType
-  saveOnboardingMission(localStorage, props.user.id, onboarding.value, mission)
+  if (action === "student-first-stage" && !onboardingStudentProject.value) {
+    ElMessage.info("当前还没有可进入的实训，教师发布任务后会在这里继续引导")
+    return
+  }
+  saveOnboardingMission(onboardingStorage, props.user.id, onboarding.value, mission)
   showGuide.value = false
   resumeOnboardingMission()
 }
@@ -292,7 +308,7 @@ function resumeOnboardingMission() {
 }
 
 function deferOnboardingMission() {
-  if (onboarding.value) clearOnboardingMission(localStorage, props.user.id, onboarding.value)
+  if (onboarding.value) clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
   onboardingMission.value = null
 }
 
@@ -304,7 +320,7 @@ async function completeOnboardingMission(action: OnboardingAction) {
       method: "POST",
       body: JSON.stringify({ version: onboarding.value.version, skipped: false })
     })
-    clearOnboardingProgress(localStorage, props.user.id, onboarding.value)
+    clearOnboardingProgress(onboardingStorage, props.user.id, onboarding.value)
     onboardingMission.value = null
     ElMessage.success("首次实操已完成，后续可从帮助入口重新查看引导")
   } catch (error) {
@@ -328,8 +344,13 @@ function handleStudentOnboardingAction(action: "stage-started" | "simulation-ope
 }
 
 function replayGuide() {
-  if (onboarding.value) clearOnboardingMission(localStorage, props.user.id, onboarding.value)
+  if (onboarding.value) clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
   onboardingMission.value = null
+  if (!isTeacher.value && !onboardingStudentProject.value) {
+    showGuide.value = false
+    ElMessage.info("当前还没有可进入的实训；引导会在教师发布任务后自动出现")
+    return
+  }
   showGuide.value = true
 }
 
@@ -427,9 +448,9 @@ function handleUserCommand(command: string) {
       <ClassManagementView v-else-if="activeSection === 'classes' && isTeacher" :teaching-overview="teachingOverview" @create-assignment="openAssignmentWizard" @edit-assignment="editAssignment" @view-progress="navigate('progress')" @project="openV3Project" @changed="retryPlatformData" />
       <QuestionBankManagementView v-else-if="activeSection === 'question-banks' && isTeacher" />
     </main>
-    <OnboardingGuide v-if="showGuide && onboarding" :user="user" :state="onboarding" :student-scene-type="onboardingStudentProject?.sceneType ?? null" @done="finishGuide" @later="deferGuide" @start="startGuideMission" />
     <V3AssignmentWizard v-if="isTeacher" :key="assignmentWizardKey" v-model:visible="showAssignmentWizard" :initial-scene-type="wizardSceneType" :initial-region-id="wizardRegionId" :initial-draft-id="wizardDraftId" @opened="completeOnboardingMission('teacher-first-assignment')" @published="assignmentPublished" @open-regions="openRegionsFromWizard" />
   </div>
+  <OnboardingGuide v-if="showGuide && onboarding" :user="user" :state="onboarding" :student-scene-type="onboardingStudentProject?.sceneType ?? null" :student-has-project="Boolean(onboardingStudentProject)" @done="finishGuide" @later="deferGuide" @start="startGuideMission" />
   <section v-if="onboardingMission" class="onboarding-mission" role="status" aria-live="polite" :data-onboarding-mission="onboardingMission.action">
     <div><span>首次实操</span><strong>{{ onboardingMissionTitle }}</strong><small>{{ onboardingMissionDetail }}</small></div>
     <el-button text :disabled="onboardingMissionSaving" @click="deferOnboardingMission">稍后继续</el-button>

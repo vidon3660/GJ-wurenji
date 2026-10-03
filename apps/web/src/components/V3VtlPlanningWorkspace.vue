@@ -763,4 +763,26 @@ function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
 .planning-empty-state svg,.check-list svg,.passed svg,.order-panel svg{width:14px;height:14px;max-width:14px;max-height:14px;flex:none}
 .allocation-panel .allocation-aircraft-list,.allocation-panel > .planning-empty-state{display:none}
 .compact-object-detail,.allocation-object-detail{display:grid;gap:5px;border:1px solid #d5e0da;padding:7px;background:#f7faf8}.compact-object-detail span,.allocation-object-detail header,.allocation-object-detail > div{display:flex;align-items:center;justify-content:space-between;gap:6px}.compact-object-detail strong,.allocation-object-detail header strong{font-size: 11px}.compact-object-detail b,.compact-object-detail small,.allocation-object-detail span{font-size: 11px;color:#60766b}.vtl-map-element-list{display:grid;gap:4px;border-top:1px solid #dce5e0;margin-top:8px;padding-top:8px}.vtl-map-element-list header{display:flex;justify-content:space-between;align-items:center}.vtl-map-element-list header strong{font-size: 11px}.vtl-map-element-list header small{color:#81928a;font-size: 11px}.vtl-map-element-list button{display:flex;justify-content:space-between;gap:6px;border:1px solid #dce5e0;padding:5px 6px;text-align:left;background:#fff;color:#3c5b4e;cursor:pointer}.vtl-map-element-list button.selected{border-color:#247253;background:#eaf4ee}.vtl-map-element-list button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size: 11px}.vtl-map-element-list button small{color:#81928a;font-size: 11px}.allocation-object-detail{margin:7px 0}.allocation-object-detail header span{color:#247253;font-size: 11px}.allocation-object-detail > div{justify-content:flex-start;flex-wrap:wrap}.allocation-object-detail > div span{font-size: 11px}.allocation-object-detail > div b{color:#315b4b}.allocation-object-detail label{display:grid;gap:3px;font-size: 11px;color:#60766b}.compact-assign-button{justify-self:start;border:1px solid #247253;padding:4px 7px;color:#fff;background:#247253;font-size: 11px;cursor:pointer}.compact-assign-button:disabled{cursor:not-allowed;opacity:.45}
+
+@media (max-width: 1080px) {
+  .vtl-planning-workspace { grid-column: 2 / 4; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(380px, 48vh) auto; overflow: auto; }
+  .vtl-planning-commandbar { grid-column: 1; grid-template-columns: minmax(0, 1fr) auto; position: sticky; z-index: 5; top: 0; }
+  .vtl-planning-map { grid-column: 1; grid-row: 2; }
+  .vtl-planning-inspector { grid-column: 1; grid-row: 3; border-top: 1px solid #ccd7d2; border-left: 0; overflow: visible; }
+  .vtl-command-actions { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; }
+}
+@media (max-width: 760px) {
+  .vtl-planning-workspace { grid-column: 1; grid-row: 3 / 5; grid-template-rows: auto 360px auto; }
+  .vtl-planning-commandbar { padding: 8px 9px; }
+  .vtl-planning-commandbar dl { display: none; }
+  .vtl-command-actions button { flex: 0 0 auto; }
+}
+@media (max-width: 420px) {
+  .vtl-planning-workspace { grid-template-rows: auto 300px auto; }
+  .vtl-planning-commandbar { grid-template-columns: minmax(0, 1fr); }
+  .unsaved-state { grid-column: 1; justify-self: start; }
+  .vtl-command-actions { grid-column: 1; }
+  .group-summary-list, .route-result, .check-kpis, .summary-grid { grid-template-columns: 1fr; }
+}
+
 </style>
