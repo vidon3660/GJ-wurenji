@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { OnboardingState } from "@wurenji/shared"
-import { clearOnboardingProgress, loadOnboardingMission, loadOnboardingStep, saveOnboardingMission, saveOnboardingStep, shouldShowOnboardingGuide } from "./onboarding-flow"
+import { clearOnboardingDeferred, clearOnboardingProgress, loadOnboardingDeferred, loadOnboardingMission, loadOnboardingStep, saveOnboardingDeferred, saveOnboardingMission, saveOnboardingStep, shouldShowOnboardingGuide } from "./onboarding-flow"
 
 function memoryStorage() {
   const values = new Map<string, string>()
@@ -28,6 +28,16 @@ describe("onboarding flow", () => {
     expect(shouldShowOnboardingGuide({ ...deferred, isTeacher: true, studentProjectId: "project-2" })).toBe(false)
   })
 
+  it("persists a postpone choice per account and guide version", () => {
+    const storage = memoryStorage()
+    saveOnboardingDeferred(storage, "student-1", state, "project-1")
+    expect(loadOnboardingDeferred(storage, "student-1", state)).toBe("project-1")
+    expect(loadOnboardingDeferred(storage, "student-2", state)).toBeNull()
+    expect(loadOnboardingDeferred(storage, "student-1", { ...state, version: 3 })).toBeNull()
+    clearOnboardingDeferred(storage, "student-1", state)
+    expect(loadOnboardingDeferred(storage, "student-1", state)).toBeNull()
+  })
+
   it("keeps a resumed workspace and an active mission free of automatic popups", () => {
     expect(shouldShowOnboardingGuide({ ...guideContext, inWorkspace: true })).toBe(false)
     expect(shouldShowOnboardingGuide({ ...guideContext, hasMission: true })).toBe(false)
@@ -51,6 +61,7 @@ describe("onboarding flow", () => {
     clearOnboardingProgress(storage, "student-1", state)
     expect(loadOnboardingStep(storage, "student-1", state, 4)).toBe(0)
     expect(loadOnboardingMission(storage, "student-1", state)).toBeNull()
+    expect(loadOnboardingDeferred(storage, "student-1", state)).toBeNull()
   })
 
   it("keeps the guide usable when browser storage throws", () => {
