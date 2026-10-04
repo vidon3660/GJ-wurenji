@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
-import { Bell, Collection, DataAnalysis, MapLocation, Promotion, User } from "@element-plus/icons-vue"
+import { Bell, Collection, DocumentChecked, MapLocation, Promotion } from "@element-plus/icons-vue"
 import type { AuthUser, OnboardingState, SceneType } from "@wurenji/shared"
 import { api } from "../api"
 import { clearOnboardingProgress, getOnboardingStorage, loadOnboardingStep, saveOnboardingStep, type OnboardingAction } from "../onboarding-flow"
@@ -15,16 +15,16 @@ const storage = getOnboardingStorage()
 
 const teacherSteps = [
   { title: "选择教学场景", text: "先确定本次教学目标。表演关注编队与时序，物流关注订单与调度，垂起关注航线、能源和巡检安全。", icon: Collection },
-  { title: "核对教学区域", text: "选择预设教学区域，核对地图资源、禁飞区、起降点和高程状态，再进入任务配置。", icon: MapLocation },
-  { title: "配置并发布", text: "完成题库、规模、时段、事件、评价与班级配置；发布检查会定位仍需处理的项目。", icon: Promotion },
-  { title: "开始首个任务", text: "前往预设区域，选择一个区域并点击“用此区域创建任务”。系统确认任务配置已打开后才完成引导。", icon: User, action: { target: "teacher-first-assignment" as const, label: "选择区域并开始配置" } }
+  { title: "创建首套题库", text: "进入题库管理，新建适用场景的题库，至少添加一道可判分题目，保存版本并发布；学生任务只能绑定已发布版本。", icon: DocumentChecked },
+  { title: "核对区域与任务条件", text: "选择预设区域，核对建筑、限制区、起降点和高程状态；回到任务向导绑定刚发布的题库，再检查规模、时段和事件。", icon: MapLocation },
+  { title: "发布并分发首个任务", text: "从预设区域进入任务向导，确认题库、班级、开放时间和预检结果，点击“确认发布”。系统会在任务真正发布后完成引导。", icon: Promotion, action: { target: "teacher-first-question-bank" as const, label: "进入题库并创建首题" } }
 ]
 
 const studentSteps = [
   { title: "找到当前实训", text: "从待处理任务进入实训，先确认场景、截止时间、当前阶段和唯一下一步。", icon: Collection },
-  { title: "按阶段完成规划", text: "2D 用于航线和任务规划，3D 用于检查地形、高度、建筑和安全距离。", icon: MapLocation },
-  { title: "运行并处置告警", text: "仿真运行中根据任务表和时间轴判断状态；发生告警后记录发现、依据、动作和预期结果。", icon: Bell },
-  { title: "开始首个操作", text: "进入当前实训，开始或恢复一个阶段；若仿真已经开放，也可以直接进入仿真运行。系统确认操作成功后完成引导。", icon: DataAnalysis, action: { target: "student-first-stage" as const, label: "进入实训并开始操作" } }
+  { title: "按阶段完成规划", text: "先阅读任务条件，再用 2D 完成区域、点位或航线规划，用 3D 检查地形、高度、建筑和安全距离。", icon: MapLocation },
+  { title: "打开题库并提交首份作答", text: "进入实训后点击顶部“题库”，填写可编辑题目并保存草稿；确认内容后点击“提交作答”，提交后会生成自动判定。", icon: DocumentChecked },
+  { title: "查看判定与运行结果", text: "提交后在同一题库面板查看正确、部分得分、未通过和等待仿真证据状态；教师发布评价后可再次打开查看最终结果。", icon: Bell, action: { target: "student-first-questionnaire" as const, label: "进入实训并打开题库" } }
 ]
 
 const steps = computed(() => props.user.role === "student" ? studentSteps : teacherSteps)
