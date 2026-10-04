@@ -16,7 +16,19 @@ const errors = collectPageErrors(page)
 
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" })
-  await page.getByRole("button", { name: "教师演示", exact: true }).click()
+  // The login page requires selecting the demo account and then submitting
+  // the configured password.  Keep the acceptance flow compatible with both
+  // an already-authenticated storage state and the current explicit login UI.
+  const loginPage = page.locator(".login-page")
+  if (await loginPage.isVisible().catch(() => false)) {
+    await page.getByRole("button", { name: /^教师演示/ }).first().click()
+    const teacherPassword = process.env.DEMO_TEACHER_PASSWORD
+    if (!teacherPassword) {
+      throw new Error("题库浏览器验收需要登录教师账号；请设置 DEMO_TEACHER_PASSWORD，或传入已有登录会话")
+    }
+    await page.locator('input[name="password"]').fill(teacherPassword)
+    await page.getByRole("button", { name: "登录平台", exact: true }).click()
+  }
   await page.locator(".platform-shell").waitFor({ timeout: 15_000 })
   const skip = page.getByRole("button", { name: "跳过引导", exact: true })
   if (await skip.count() && await skip.first().isVisible()) await skip.first().click()
