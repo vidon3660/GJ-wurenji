@@ -146,7 +146,8 @@ const playbackState = computed(() => {
     workspace.value.maximumHeightMeters,
     workspace.value.durationMs,
     playbackTimeMs.value,
-    reconstruct
+    reconstruct,
+    workspace.value.program.groupTracks ?? []
   )
 })
 // 实时运行时服务端按秒推送快照；用本地仿真时钟补齐两次快照之间的连续位置变化，
@@ -161,7 +162,8 @@ const livePlaybackState = computed(() => {
     workspace.value.maximumHeightMeters,
     workspace.value.durationMs,
     playbackTimeMs.value,
-    false
+    false,
+    workspace.value.program.groupTracks ?? []
   )
 })
 const runtimeProgress = computed(() => Math.min(100, playbackTimeMs.value / Math.max(1, workspace.value?.durationMs ?? 1) * 100))
