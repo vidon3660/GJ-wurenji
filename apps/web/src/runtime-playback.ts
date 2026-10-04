@@ -11,6 +11,7 @@ import type {
   ShowRuntimeGroupView,
   ShowRuntimePhase,
   ShowRuntimeTotalsView,
+  ShowProgramGroupTrack,
   V3AlertSeverity,
   V3Coordinate,
   VtlRuntimeAircraftView,
@@ -171,7 +172,8 @@ export function projectShowRuntimePlayback(
   maximumHeightMeters: number,
   durationMs: number,
   simulationTimeMs: number,
-  reconstructOperationalState: boolean
+  reconstructOperationalState: boolean,
+  programTracks: readonly ShowProgramGroupTrack[] = []
 ): ShowRuntimePlaybackState {
   const duration = Math.max(1_000, durationMs)
   const time = clamp(simulationTimeMs, 0, duration)
@@ -187,7 +189,9 @@ export function projectShowRuntimePlayback(
       phase,
       segmentProgress,
       index,
-      Math.max(1, groups.length)
+      Math.max(1, groups.length),
+      simulationTimeMs,
+      programTracks.find((track) => track.groupId === group.groupId)
     )
     if (!reconstructOperationalState) return { ...group, center }
     const counts = showGroupCounts(group.plannedCount, phase, segmentProgress, index, Math.max(1, groups.length))
@@ -327,8 +331,22 @@ function showGroupCenter(
   phase: ShowRuntimePhase,
   progress: number,
   index: number,
-  groupCount: number
+  groupCount: number,
+  simulationTimeMs = 0,
+  programTrack?: ShowProgramGroupTrack
 ): V3Coordinate {
+  if (programTrack && programTrack.points.length >= 2) {
+    const point = interpolateProgramTrack(programTrack.points, simulationTimeMs)
+    const latitudeOffset = point.northMeters / 111_320
+    const longitudeScale = Math.max(0.1, Math.cos(center.latitude * Math.PI / 180))
+    const longitudeOffset = point.eastMeters / (111_320 * longitudeScale)
+    const airborne = !["READY", "TAKEOFF_PREPARATION", "COMPLETED", "ABORTED"].includes(phase)
+    return {
+      longitude: center.longitude + longitudeOffset,
+      latitude: center.latitude + latitudeOffset,
+      altitudeMeters: airborne ? point.upMeters : 0
+    }
+  }
   const baseAngle = index / groupCount * Math.PI * 2
   const spread = phase === "TAKEOFF_PREPARATION" ? 0.18
     : phase === "BATCH_TAKEOFF" ? interpolate(0.18, 0.28, progress)
@@ -352,6 +370,26 @@ function showGroupCenter(
     longitude: center.longitude + longitudeOffset,
     latitude: center.latitude + latitudeOffset,
     altitudeMeters: Math.max(0, altitude)
+  }
+}
+
+function interpolateProgramTrack(points: ShowProgramGroupTrack["points"], timeMs: number) {
+  if (timeMs <= points[0]!.timeMs) return points[0]!
+  if (timeMs >= points.at(-1)!.timeMs) return points.at(-1)!
+  let low = 0
+  let high = points.length - 1
+  while (low + 1 < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (points[middle]!.timeMs <= timeMs) low = middle
+    else high = middle
+  }
+  const left = points[low]!
+  const right = points[high]!
+  const ratio = (timeMs - left.timeMs) / Math.max(1, right.timeMs - left.timeMs)
+  return {
+    eastMeters: left.eastMeters + (right.eastMeters - left.eastMeters) * ratio,
+    northMeters: left.northMeters + (right.northMeters - left.northMeters) * ratio,
+    upMeters: left.upMeters + (right.upMeters - left.upMeters) * ratio
   }
 }
 
