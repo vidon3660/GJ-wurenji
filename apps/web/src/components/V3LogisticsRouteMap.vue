@@ -57,7 +57,7 @@ import { isSelectedLogisticsRouteEntity, logisticsFocusCoordinates, logisticsNod
 import { createV3MapDataStateTracker, type V3MapDataState, type V3MapDataStateTracker, type V3MapImageryState } from "../map-loading-state"
 import { regionMapResourceKey } from "../map-resources"
 import { loadV3MapResources } from "../map-resources-loader"
-import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
+import { buildingHeightMeters, hasRenderableOfflineBuildingFeatures, resolveBuildingDataUrl } from "../map-building-layer"
 import { captureV3Camera, focusV3Coordinates, focusV3Region, isCoordinateInsideRegion, regionMaskHierarchy, restoreV3Camera } from "../map-region-constraints"
 import { resetV3CameraNorth, rotateV3Camera, setV3CameraPreset, zoomV3Camera } from "../map-region-constraints"
 import type { RegionTerrainState } from "../terrain"
@@ -273,9 +273,18 @@ async function loadOfflineLogisticsResources() {
     }
     offlineBuildingsSource = source
     viewer.dataSources.add(source)
+    // Refresh the manifest layer only after the external package has loaded.
+    // An empty package keeps the manifest footprints because the helper above
+    // requires at least one polygon before hiding them.
+    renderLayers()
     syncOfflineBuildingVisibility()
   } catch {
-    if (generation === offlineBuildingGeneration) offlineBuildingsSource = null
+    if (generation === offlineBuildingGeneration) {
+      offlineBuildingsSource = null
+      // Restore manifest footprints if a previously available package failed
+      // while switching regions or refreshing the local resource.
+      renderLayers()
+    }
   }
 }
 
@@ -485,9 +494,20 @@ function renderLayers() {
   layerSource.entities.removeAll()
   const labelBudget = createMapLabelBudget()
   const visible = new Set(props.visibleLayers)
+  const configuredBuildingsUrl = resolveBuildingDataUrl(
+    props.region,
+    (import.meta.env.VITE_LOGISTICS_BUILDINGS_URL as string | undefined) ?? ""
+  )
+  const offlineBuildingFeatureCount = offlineBuildingsSource?.entities.values.filter((entity) => Boolean(entity.polygon)).length ?? 0
+  const hasExternalBuildingFeatures = hasRenderableOfflineBuildingFeatures(offlineBuildingFeatureCount)
   for (const layer of props.region.layers) {
     if (!visible.has(layer.code)) continue
     for (const feature of layer.features) {
+      // Keep manifest obstacles and other teaching features, but replace the
+      // duplicate building footprints once the package GeoJSON is ready. If
+      // the package is empty or unavailable this stays false, preserving the
+      // manifest fallback for offline teaching.
+      if (layer.code === "BUILDINGS" && hasExternalBuildingFeatures && configuredBuildingsUrl && feature.properties?.category === "BUILDING") continue
       const featureKind = logisticsSpatialFeatureKind(layer.code, feature)
       const isBuilding = layer.code === "BUILDINGS"
       const isRestriction = layer.code === "RESTRICTIONS"
