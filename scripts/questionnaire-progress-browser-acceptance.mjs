@@ -35,7 +35,19 @@ if (injectFailure) {
 
 try {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" })
-  await page.getByRole("button", { name: "学生演示", exact: true }).click()
+  // The demo buttons only choose the account; submit the password when the
+  // current session is not already authenticated.  The previous exact
+  // label also became stale after the login UI added the “需密码” hint.
+  const loginPage = page.locator(".login-page")
+  if (await loginPage.isVisible().catch(() => false)) {
+    await page.getByRole("button", { name: /^学生演示/ }).first().click()
+    const studentPassword = process.env.DEMO_STUDENT_PASSWORD
+    if (!studentPassword) {
+      throw new Error("问卷进度浏览器验收需要登录学生账号；请设置 DEMO_STUDENT_PASSWORD，或传入已有登录会话")
+    }
+    await page.locator('input[name="password"]').fill(studentPassword)
+    await page.getByRole("button", { name: "登录平台", exact: true }).click()
+  }
   await page.locator(".platform-shell").waitFor({ timeout: 15_000 })
   const skip = page.getByRole("button", { name: "跳过引导", exact: true })
   if (await skip.count() && await skip.first().isVisible()) await skip.first().click()
