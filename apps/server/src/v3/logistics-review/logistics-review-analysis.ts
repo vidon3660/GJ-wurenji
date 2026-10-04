@@ -22,6 +22,19 @@ export interface LogisticsReviewAnalysisSources {
   dynamicScheduleVersions: LogisticsDynamicScheduleVersionEntity[]
 }
 
+/** Runtime projections call the simulated arrival `expectedArrivalTimeMs` and
+ * the order deadline `latestArrivalTimeMs`; keep this comparison in one place
+ * so the summary metric and the review analysis cannot drift. */
+export function isOnTimeArrival(actualArrivalTimeMs: number | null, deadlineTimeMs: number | null): boolean {
+  return Number.isFinite(actualArrivalTimeMs) && Number.isFinite(deadlineTimeMs)
+    && actualArrivalTimeMs! <= deadlineTimeMs!
+}
+
+export function logisticsOnTimeRate(onTimeCount: number, completedOrders: number, delayedOrders: number): number {
+  const deliveredOrders = Math.max(0, completedOrders) + Math.max(0, delayedOrders)
+  return deliveredOrders > 0 ? Math.max(0, onTimeCount) / deliveredOrders : 1
+}
+
 export function computeLogisticsReviewAnalysis(sources: LogisticsReviewAnalysisSources): V3LogisticsReviewAnalysisView {
   const finalProjection = sources.snapshots.at(-1)?.projection
   const summary = finalProjection?.summary ?? emptySummary()
@@ -75,7 +88,7 @@ function onTimeDeliveryAnalysis(
   summary: LogisticsRuntimeSummaryView
 ): V3LogisticsReviewAnalysisSectionView {
   const deliveredCount = summary.completedOrders + summary.delayedOrders
-  const onTimeCount = orders.filter((order) => order.status === "COMPLETED" && order.expectedArrivalTimeMs !== null && order.expectedArrivalTimeMs <= order.latestArrivalTimeMs).length
+  const onTimeCount = orders.filter((order) => order.status === "COMPLETED" && isOnTimeArrival(order.expectedArrivalTimeMs, order.latestArrivalTimeMs)).length
   const onTimeRate = percentage(onTimeCount, deliveredCount)
   const completionRate = percentage(deliveredCount, scheduledOrderCount)
   const state: ShowObjectiveMetricState = scheduledOrderCount > 0 && deliveredCount === scheduledOrderCount && onTimeCount === deliveredCount ? "PASS" : "RISK"
