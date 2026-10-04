@@ -134,6 +134,44 @@ describe("runtime playback", () => {
     expect(state.groups[0]?.center.longitude).not.toBe(114)
   })
 
+  it("replays imported group keyframes instead of a synthetic orbit", () => {
+    const group: ShowRuntimeGroupView = {
+      groupId: "G01",
+      label: "编队 1",
+      plannedCount: 10,
+      airborneCount: 10,
+      landedCount: 0,
+      normalCount: 10,
+      warningCount: 0,
+      abnormalCount: 0,
+      lostCount: 0,
+      status: "AIRBORNE",
+      center: { longitude: 114, latitude: 22, altitudeMeters: 80 },
+      radiusMeters: 20
+    }
+    const totals: ShowRuntimeTotalsView = {
+      plannedCount: 10,
+      takeoffCount: 10,
+      airborneCount: 10,
+      landedCount: 0,
+      normalCount: 10,
+      warningCount: 0,
+      abnormalCount: 0,
+      lostCount: 0
+    }
+    const state = projectShowRuntimePlayback(
+      [group], totals, { longitude: 114, latitude: 22 }, 200, 120, 100_000, 50_000, true,
+      [{ groupId: "G01", points: [
+        { timeMs: 0, eastMeters: 0, northMeters: 0, upMeters: 20 },
+        { timeMs: 100_000, eastMeters: 100, northMeters: 0, upMeters: 80 }
+      ] }]
+    )
+
+    expect(state.groups[0]?.center.longitude).toBeCloseTo(114.00048, 5)
+    expect(state.groups[0]?.center.latitude).toBeCloseTo(22, 5)
+    expect(state.groups[0]?.center.altitudeMeters).toBeCloseTo(50, 5)
+  })
+
   it("projects logistics aircraft along the route", () => {
     const state = projectLogisticsRuntimePlayback({
       simulationTimeMs: 0,
