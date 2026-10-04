@@ -16,6 +16,8 @@
     "test": "npm run test --workspace @wurenji/simulation && npm run test --workspace @wurenji/server && npm run test --workspace @wurenji/web",
     "map-edit:smoke": "node --env-file-if-exists=.env scripts/map-edit-smoke.mjs",
     "map:demo-assets": "node scripts/create-demo-logistics-assets.mjs",
+    "map:fetch-assets": "node --env-file-if-exists=.env scripts/fetch-map-region-assets.mjs",
+    "test:map:fetch-assets": "node --test scripts/fetch-map-region-assets.test.mjs",
     "visual:smoke": "node --env-file-if-exists=.env scripts/visual-smoke.mjs",
     "accessibility:browser": "node --env-file-if-exists=.env scripts/accessibility-browser-smoke.mjs",
     "acceptance:teacher-home:responsive": "node --env-file-if-exists=.env scripts/teacher-home-responsive-acceptance.mjs",

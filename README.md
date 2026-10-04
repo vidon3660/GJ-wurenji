@@ -59,6 +59,23 @@
 
 没有正式区域包时只能使用仓库内置轻量教学区或椭球地面。Cesium ion 世界影像、世界地形和 OSM 3D Buildings 都是可选外部服务，不能代替任务资源包中的建筑和高程数据。`VITE_DEM_TERRAIN_URL` 必须指向 Cesium quantized-mesh `layer.json` 服务，不能填写原始 GeoTIFF。
 
+### 获取网络建筑和高程数据
+
+仓库提供小范围来源下载脚本 `npm run map:fetch-assets`，默认获取 WGS84 教学区 `[113.287, 23.067, 113.323, 23.103]` 内的 OSM 建筑轮廓和 AWS Terrain Tiles Skadi HGT 高程，在 `data/map/network-sources` 保存建筑 GeoJSON、原始 HGT、高程采样 JSON 与来源清单。输出目录不纳入 Git，不会自动绑定课程或替换已发布任务地图。
+
+```bash
+MAP_NETWORK_REGION=gd-north-core \
+MAP_NETWORK_EXTENT=113.287,23.067,113.323,23.103 \
+MAP_NETWORK_SAMPLE_GRID=37 \
+MAP_NETWORK_OUTPUT_DIR=data/map/network-sources \
+npm run map:fetch-assets
+npm run test:map:fetch-assets
+```
+
+当前脚本只支持单个 1° HGT 单元内的小范围区域。OSM 建筑可能缺少高度；按层数估算和前端演示白模高度都不能代替实测高度。HGT、Terrarium 和 GeoTIFF 是高程来源，Cesium 地形仍需 quantized-mesh 转换或有访问权限的 ion 服务。Copernicus GLO-30 COG 也可作为待处理高程来源，但其地表模型和垂直基准必须按任务用途检查。
+
+[OSM 公共栅格瓦片政策](https://operations.osmfoundation.org/policies/tiles/)不允许批量离线下载；离线影像须选用允许下载和分发的来源。下载之后仍须完成范围确认、高程参考面处理、建筑高度补全、地形转换、区域导入和资源检查。具体数据来源、文件格式和命令见[地图资源说明](docs/城市物流无人机离线地图改造总体架构.md)。
+
 ## 技术结构
 
 ```text
@@ -134,6 +151,8 @@ npm run dev
 | 生产构建 | `npm run build` |
 | 仿真、服务端、前端测试 | `npm test` |
 | 生成物流教学地图 | `npm run map:demo-assets` |
+| 下载小范围建筑和高程来源 | `npm run map:fetch-assets` |
+| 地图下载脚本测试 | `npm run test:map:fetch-assets` |
 | 区域地图导入 | `npm run map:region:import -- --config path/to/region-config.json --output-root data/map` |
 | 地图资源检查 | `npm run map:resources:acceptance` |
 | 资源包构建 | `npm run resource:build -- --manifest path/to/descriptor.json --source-dir path/to/package --private-key path/to/key.pem --key-id key-id` |
