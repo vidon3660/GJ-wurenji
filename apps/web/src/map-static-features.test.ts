@@ -97,6 +97,15 @@ describe("runtime static map features", () => {
     expect(building?.polyline).toBeDefined()
   })
 
+  it("can replace manifest building footprints while retaining obstacles", () => {
+    const source = new CustomDataSource("test-external-buildings")
+
+    renderRegionStaticFeatures(source, region(), "3d", "logistics-runtime-static", undefined, { skipBuildingFootprints: true })
+
+    expect(source.entities.getById("logistics-runtime-static:layer:BUILDINGS:building-1")).toBeUndefined()
+    expect(source.entities.getById("logistics-runtime-static:layer:BUILDINGS:obstacle-1")?.cylinder).toBeDefined()
+  })
+
   it("renders a 3D obstacle as a cylinder instead of a point", () => {
     const source = new CustomDataSource("test-obstacle")
 
