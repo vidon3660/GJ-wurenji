@@ -16,7 +16,8 @@ export function renderRegionStaticFeatures(
   region: V3RegionCatalogItem | null,
   mode: "2d" | "3d",
   idPrefix: string,
-  visibleLayers: readonly V3RegionLayerCode[] = ["BUILDINGS", "RESTRICTIONS", "WATER", "GREENLAND"]
+  visibleLayers: readonly V3RegionLayerCode[] = ["BUILDINGS", "RESTRICTIONS", "WATER", "GREENLAND"],
+  options: { skipBuildingFootprints?: boolean } = {}
 ): void {
   if (!region) return
   const threeDDisplayCondition = mode === "3d" ? new DistanceDisplayCondition(0, staticFeatureFarDistance(region)) : undefined
@@ -24,7 +25,16 @@ export function renderRegionStaticFeatures(
   for (const layer of region.layers) {
     if (!visible.has(layer.code)) continue
     if (layer.state === "UNAVAILABLE") continue
-    for (const feature of layer.features) addRegionFeature(source, layer.code, feature, mode, idPrefix, threeDDisplayCondition)
+    for (const feature of layer.features) {
+      // Imported packages may keep a lightweight manifest footprint for
+      // teaching. Once the authoritative GeoJSON has loaded, callers can
+      // suppress only those polygons while retaining manifest obstacles.
+      if (options.skipBuildingFootprints
+        && layer.code === "BUILDINGS"
+        && feature.geometryType === "POLYGON"
+        && feature.properties?.category === "BUILDING") continue
+      addRegionFeature(source, layer.code, feature, mode, idPrefix, threeDDisplayCondition)
+    }
   }
 }
 
