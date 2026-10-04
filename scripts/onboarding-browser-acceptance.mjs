@@ -70,16 +70,53 @@ async function inspectTeacher(viewport) {
     await guide.locator("nav button").first().click()
     await guide.locator(".onboarding-scene-picker button").filter({ hasText: "城市物流" }).click()
     await guide.locator("nav button").nth(3).click()
-    await guide.getByRole("button", { name: "选择区域并开始配置", exact: true }).click()
+    await guide.getByRole("button", { name: "进入题库并创建首题", exact: true }).click()
+    const questionBankMission = page.locator('[data-onboarding-mission="teacher-first-question-bank"]')
+    await questionBankMission.waitFor({ timeout: 10_000 })
+    const missionLayout = await inspectMission(page, questionBankMission)
+    const onboardingBankTitle = `ONBOARDING-${viewport.name}-${Date.now()}`
+    await page.locator(".question-bank-page").waitFor({ timeout: 15_000 })
+    await page.getByRole("button", { name: "新建题库", exact: true }).first().click()
+    await page.getByRole("textbox", { name: "题库名称", exact: true }).fill(onboardingBankTitle)
+    await page.getByRole("textbox", { name: "题库说明", exact: true }).fill("首次引导使用的场景题库。")
+    await page.getByRole("button", { name: "创建", exact: true }).click()
+    await page.getByRole("heading", { name: onboardingBankTitle, exact: true }).waitFor({ timeout: 15_000 })
+    await page.getByRole("button", { name: "添加题目", exact: true }).click()
+    const questionCard = page.locator(".question-editor-card").last()
+    await questionCard.locator(".el-form-item", { hasText: "题目编号" }).locator("input").fill(`ONBOARDING-${viewport.name}-01`)
+    await questionCard.locator(".el-form-item", { hasText: "题干" }).locator("textarea").fill("首次引导题：提交前是否已核对任务条件？")
+    await questionCard.locator(".el-form-item", { hasText: "正确答案" }).locator("textarea").fill("A")
+    await page.getByRole("button", { name: "保存新版本", exact: true }).click()
+    await page.getByText("新题库版本已保存", { exact: true }).waitFor({ timeout: 15_000 })
+    await page.getByRole("button", { name: "发布当前版本", exact: true }).click()
+    await page.getByRole("button", { name: "发布", exact: true }).click()
+    await page.getByText("题库版本已发布", { exact: true }).waitFor({ timeout: 15_000 })
     const mission = page.locator('[data-onboarding-mission="teacher-first-assignment"]')
     await mission.waitFor({ timeout: 10_000 })
-    const missionLayout = await inspectMission(page, mission)
+    await page.getByRole("button", { name: "用此区域创建任务", exact: true }).first().waitFor({ timeout: 15_000 })
     const activeScene = await page.locator(".scene-segment button[aria-pressed='true']").first().innerText()
     await page.screenshot({ path: missionScreenshot, fullPage: true })
 
     const completionResponsePromise = waitForCompletion(page, "teacher-basics")
     await page.getByRole("button", { name: "用此区域创建任务", exact: true }).click()
     await page.locator(".v3-assignment-dialog").waitFor({ timeout: 15_000 })
+    const wizard = page.locator(".v3-assignment-dialog")
+    await wizard.getByRole("textbox", { name: "项目背景", exact: true }).fill("首次引导的城市物流教学情境。")
+    await wizard.getByRole("textbox", { name: "任务说明", exact: true }).fill("完成航线规划、订单调度和应急处置。")
+    await wizard.getByRole("textbox", { name: "完成要求", exact: true }).fill("提交规划并完成题库作答。")
+    await wizard.getByRole("button", { name: "下一步", exact: true }).click()
+    const bankSelect = wizard.locator('[aria-label="作答题库"]')
+    await bankSelect.click()
+    await page.getByRole("option", { name: new RegExp(onboardingBankTitle) }).click()
+    await wizard.getByRole("button", { name: "下一步", exact: true }).click()
+    await wizard.getByRole("button", { name: "下一步", exact: true }).click()
+    await wizard.locator('[aria-label="发布班级"]').click()
+    await page.getByRole("option").first().click()
+    await wizard.getByRole("button", { name: "生成预览", exact: true }).click()
+    await wizard.getByRole("button", { name: "确认发布", exact: true }).waitFor({ timeout: 30_000 })
+    const confirmation = wizard.locator(".preflight-confirm input")
+    if (await confirmation.count() && !(await confirmation.isChecked())) await confirmation.check()
+    await wizard.getByRole("button", { name: "确认发布", exact: true }).click()
     const completionResponse = await completionResponsePromise
     const completionPayload = await completionResponse.json()
     await mission.waitFor({ state: "detached", timeout: 10_000 })
@@ -90,7 +127,7 @@ async function inspectTeacher(viewport) {
     const passed = initialState.visible
       && initialState.layoutFits
       && initialState.focusInside
-      && deferredStep === "核对教学区域"
+      && deferredStep === "创建首套题库"
       && restoredStep === deferredStep
       && activeScene.includes("物流")
       && missionLayout.visible
@@ -117,6 +154,7 @@ async function inspectTeacher(viewport) {
       activeScene,
       missionLayout,
       completionStatus: completionResponse.status(),
+      onboardingBankTitle,
       completionPayload,
       serverState,
       replay,
@@ -144,9 +182,10 @@ async function inspectStudent(viewport) {
     await guide.waitFor({ timeout: 15_000 })
     const initialState = await inspectGuide(page, guide)
     await page.screenshot({ path: guideScreenshot, fullPage: true })
+    const completionResponsePromise = waitForCompletion(page, "student-basics")
     await guide.locator("nav button").nth(3).click()
-    await guide.getByRole("button", { name: "进入实训并开始操作", exact: true }).click()
-    const mission = page.locator('[data-onboarding-mission="student-first-stage"]')
+    await guide.getByRole("button", { name: "进入实训并打开题库", exact: true }).click()
+    const mission = page.locator('[data-onboarding-mission="student-first-questionnaire"]')
     await mission.waitFor({ timeout: 10_000 })
     const missionLayout = await inspectMission(page, mission)
 
@@ -156,19 +195,32 @@ async function inspectStudent(viewport) {
       await openStudentFixture(page)
       await workspace.waitFor({ timeout: 15_000 })
     }
-    let action = await studentCompletionAction(page)
-    if (!action) {
+    let questionnaire = page.locator(".questionnaire-panel")
+    if (!(await questionnaire.count()) || !(await questionnaire.isVisible().catch(() => false))) {
       await page.getByRole("button", { name: "返回教学首页", exact: true }).click()
       await page.locator(".home-scene-segment").waitFor({ timeout: 15_000 })
       await openStudentFixture(page)
       await workspace.waitFor({ timeout: 15_000 })
-      action = await studentCompletionAction(page)
+      questionnaire = page.locator(".questionnaire-panel")
     }
-    if (!action) throw new Error("当前学生实训没有可执行的阶段启动或仿真运行操作")
+    await questionnaire.waitFor({ timeout: 15_000 })
     await page.screenshot({ path: missionScreenshot, fullPage: true })
 
-    const completionResponsePromise = waitForCompletion(page, "student-basics")
-    await action.click()
+    const submit = questionnaire.getByRole("button", { name: "提交题库作答", exact: true })
+    if (await submit.count() && await submit.isVisible()) {
+      const answer = questionnaire.locator(".question-card").first().locator("input[type='radio'], textarea, input[type='text']").first()
+      if (await answer.count() && await answer.isVisible()) {
+        if (await answer.getAttribute("type") === "radio") await answer.check()
+        else await answer.fill("A")
+      }
+      await submit.click()
+      const confirm = page.getByRole("button", { name: /提交|仍然提交/, exact: false }).last()
+      if (await confirm.count() && await confirm.isVisible().catch(() => false)) await confirm.click()
+    } else {
+      // Existing logistics fixtures may already have a submitted attempt. In
+      // that case opening the read-only result panel is the real first action.
+      await questionnaire.getByText(/已提交|自动判定已完成|教师复核已完成/).first().waitFor({ timeout: 15_000 })
+    }
     const completionResponse = await completionResponsePromise
     const completionPayload = await completionResponse.json()
     await mission.waitFor({ state: "detached", timeout: 10_000 })
