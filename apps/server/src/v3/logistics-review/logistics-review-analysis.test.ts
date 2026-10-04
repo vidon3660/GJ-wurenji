@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest"
 import type { LogisticsReviewAnalysisSources } from "./logistics-review-analysis.js"
-import { computeLogisticsReviewAnalysis } from "./logistics-review-analysis.js"
+import { computeLogisticsReviewAnalysis, isOnTimeArrival, logisticsOnTimeRate } from "./logistics-review-analysis.js"
+
+describe("logistics objective metric boundaries", () => {
+  it("uses actual arrival against the order deadline and rejects missing timestamps", () => {
+    expect(isOnTimeArrival(100, 100)).toBe(true)
+    expect(isOnTimeArrival(99, 100)).toBe(true)
+    expect(isOnTimeArrival(101, 100)).toBe(false)
+    expect(isOnTimeArrival(100, null)).toBe(false)
+    expect(isOnTimeArrival(null, 100)).toBe(false)
+    expect(logisticsOnTimeRate(1, 1, 1)).toBe(0.5)
+    expect(logisticsOnTimeRate(1, 1, 0)).toBe(1)
+  })
+})
 
 describe("logistics review analysis", () => {
   it("computes all six result domains from authoritative runtime evidence", () => {
