@@ -336,8 +336,19 @@ function resumeOnboardingMission() {
 }
 
 function deferOnboardingMission() {
-  if (onboarding.value) clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+  if (onboarding.value) {
+    // A mission can be opened from the guide and then postponed from the
+    // persistent banner. Keep the postponement scoped to the same account and
+    // project so periodic refresh does not immediately reopen the guide. The
+    // mission itself is cleared from the active UI; the Help action can replay
+    // the guide when the learner is ready.
+    const projectId = isTeacher.value ? null : onboardingStudentProject.value?.id ?? null
+    saveOnboardingDeferred(onboardingStorage, props.user.id, onboarding.value, projectId)
+    clearOnboardingMission(onboardingStorage, props.user.id, onboarding.value)
+  }
   onboardingMission.value = null
+  onboardingGuideDeferred.value = true
+  onboardingGuideDeferredProjectId.value = isTeacher.value ? null : onboardingStudentProject.value?.id ?? null
 }
 
 async function completeOnboardingMission(action: OnboardingAction) {
