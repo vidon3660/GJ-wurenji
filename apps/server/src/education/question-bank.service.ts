@@ -30,6 +30,7 @@ import { UserEntity } from "../entities.js"
 import { ActivityLogService } from "../v3/activities/activity-log.service.js"
 import { AssessmentWindowService, assessmentTimingForProject } from "../v3/assessment/assessment-window.service.js"
 import { canonicalJson } from "../v3/common/canonical-json.js"
+import { normalizeReviewResultVisibility } from "../v3/show-review/review-visibility.js"
 import { ProjectEvaluationEntity } from "../v3/runtime/runtime.entities.js"
 import { AssignmentSnapshotEntity, StudentProjectEntity } from "../v3/assignments/assignment.entities.js"
 import {
@@ -453,6 +454,12 @@ export class QuestionBankService {
     const questions = normalizeQuestionDefinitions(version.questions, true)
     const attempt = await this.attempts.findOne({ where: { project: { id: project.id }, bankVersion: { id: version.id } } })
     const responseEntities = attempt ? await this.responses.find({ where: { attempt: { id: attempt.id } }, order: { createdAt: "ASC" } }) : []
+    const evaluation = actor === "STUDENT" && project.snapshot.mode === "ASSESSMENT"
+      ? await this.evaluations.findOne({ where: { projectId: project.id } })
+      : null
+    const resultVisibility = normalizeReviewResultVisibility(project.snapshot.config.resultVisibility, project.snapshot.mode)
+    const published = actor === "TEACHER" || project.snapshot.mode === "TRAINING" || evaluation?.status === "PUBLISHED"
+    const fullFeedback = actor === "TEACHER" || project.snapshot.mode === "TRAINING" || evaluation?.status === "PUBLISHED" && resultVisibility === "FULL_REVIEW"
     const timing = assessmentTimingForProject(project)
     const attemptIsWritable = !attempt || attempt.status === "IN_PROGRESS"
     const canWrite = actor === "STUDENT" && timing.canWrite && attemptIsWritable
@@ -468,9 +475,9 @@ export class QuestionBankService {
       canReview: actor === "TEACHER" && Boolean(attempt) && ["SUBMITTED", "GRADED"].includes(attempt!.status),
       canRegrade: actor === "TEACHER" && Boolean(attempt) && ["SUBMITTED", "GRADED"].includes(attempt!.status) && responseEntities.some((response) => response.judgment === "PENDING"),
       bank: { id: version.bank.id, title: version.bank.title, sceneType: version.bank.sceneType, summary: version.bank.summary, versionId: version.id, version: version.version },
-      attempt: attempt ? this.serializeAttempt(attempt) : null,
+      attempt: attempt ? this.serializeAttempt(attempt, { includeAutoScore: fullFeedback, includeTeacherScore: published, includeReviewComment: fullFeedback }) : null,
       questions: this.serializeQuestions(questions, actor === "TEACHER"),
-      responses: this.serializeResponses(questions, responseEntities, actor === "TEACHER")
+      responses: this.serializeResponses(questions, responseEntities, actor === "TEACHER", fullFeedback)
     }
   }
 
@@ -793,31 +800,31 @@ export class QuestionBankService {
     }))
   }
 
-  private serializeAttempt(attempt: QuestionAttemptEntity): QuestionAttemptView {
+  private serializeAttempt(attempt: QuestionAttemptEntity, options: { includeAutoScore?: boolean; includeTeacherScore?: boolean; includeReviewComment?: boolean } = {}): QuestionAttemptView {
     return {
       id: attempt.id,
       status: attempt.status,
       revision: attempt.revision,
-      autoScore: attempt.autoScore,
-      teacherScore: attempt.teacherScore,
+      autoScore: options.includeAutoScore === false ? 0 : attempt.autoScore,
+      teacherScore: options.includeTeacherScore === false ? null : attempt.teacherScore,
       maxScore: attempt.maxScore,
       submittedAt: attempt.submittedAt?.toISOString() ?? null,
       reviewedAt: attempt.reviewedAt?.toISOString() ?? null,
-      reviewComment: attempt.reviewComment
+      reviewComment: options.includeReviewComment === false ? "" : attempt.reviewComment
     }
   }
 
-  private serializeResponses(questions: QuestionBankVersionEntity["questions"], entities: QuestionResponseEntity[], includeAnswer: boolean): QuestionResponseView[] {
+  private serializeResponses(questions: QuestionBankVersionEntity["questions"], entities: QuestionResponseEntity[], includeAnswer: boolean, includeFeedback = true): QuestionResponseView[] {
     const byCode = new Map(entities.map((response) => [response.questionCode, response]))
     return normalizeQuestionDefinitions(questions).map((question) => {
       const response = byCode.get(question.code)
       return {
         questionCode: question.code,
         answer: response?.answer ?? null,
-        autoScore: response?.autoScore ?? null,
+        autoScore: includeFeedback ? response?.autoScore ?? null : null,
         maxScore: response?.maxScore ?? question.maxScore,
-        judgment: response?.judgment ?? "UNANSWERED",
-        evidence: response?.evidence ?? [],
+        judgment: includeFeedback ? response?.judgment ?? "UNANSWERED" : "UNANSWERED",
+        evidence: includeFeedback ? response?.evidence ?? [] : [],
         ...(includeAnswer ? { teacherScore: response?.teacherScore ?? null, teacherComment: response?.teacherComment ?? "" } : { teacherScore: null, teacherComment: "" })
       }
     })
