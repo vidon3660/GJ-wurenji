@@ -184,6 +184,22 @@ describe("QuestionBankService regrade", () => {
     expect(manager.save).not.toHaveBeenCalled()
   })
 
+  it("treats a retried submit as idempotent after the attempt is already submitted", async () => {
+    const value = fixture()
+    value.responses[1]!.judgment = "CORRECT"
+    value.responses[1]!.autoScore = 20
+    const { service, manager } = buildService(value)
+    const student = { id: value.project.student.id, email: "student@example.com", displayName: "学生", role: "student" } as AuthUser
+
+    const result = await service.saveQuestionnaire(value.project.id, student, {
+      expectedRevision: value.attempt.revision,
+      responses: []
+    }, true)
+
+    expect(result.attempt).toMatchObject({ status: "SUBMITTED", revision: value.attempt.revision })
+    expect(manager.save).not.toHaveBeenCalled()
+  })
+
   it("does not expose answers or grading rules in the student questionnaire view", async () => {
     const value = fixture()
     const { service } = buildService(value)
