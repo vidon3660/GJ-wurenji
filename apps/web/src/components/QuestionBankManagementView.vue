@@ -42,6 +42,8 @@ interface QuestionEditor {
   threshold: number
 }
 
+const emit = defineEmits<{ published: [bankId: string] }>()
+
 const banks = ref<QuestionBankSummary[]>([])
 const selectedBank = ref<QuestionBankDetail | null>(null)
 const selectedBankId = ref("")
@@ -385,6 +387,7 @@ async function publishVersion() {
     syncEditors(detail.questions)
     await loadBanks(detail.id)
     ElMessage.success("题库版本已发布")
+    emit("published", detail.id)
   } catch (error) {
     if (error === "cancel" || error === "close") return
     ElMessage.error(error instanceof Error ? error.message : "题库发布失败")
