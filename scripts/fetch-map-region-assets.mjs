@@ -24,6 +24,7 @@ export async function fetchMapRegionAssets(options = {}) {
   const outputDirectory = resolve(options.outputDirectory ?? DEFAULT_OUTPUT)
   const sampleGrid = options.sampleGrid ?? 37
   validateExtent(extent)
+  validateRegion(region)
   if (!Number.isInteger(sampleGrid) || sampleGrid < 2 || sampleGrid > 181) throw new Error("sampleGrid 必须是 2 到 181 的整数")
 
   const [west, south, east, north] = extent
@@ -105,7 +106,7 @@ export async function fetchMapRegionAssets(options = {}) {
     },
     terrain: {
       status: "NOT_QUANTIZED_MESH",
-      note: "HGT is retained only as the source for the JSON elevation snapshot. Convert a reviewed DEM to Cesium quantized-mesh before publishing a formal region package."
+      note: "HGT is retained as the raw source for the JSON elevation snapshot. Convert a reviewed DEM to Cesium quantized-mesh before publishing a formal region package."
     }
   }
   await writeFile(manifestPath, `${JSON.stringify(sourceManifest, null, 2)}\n`, "utf8")
@@ -118,7 +119,7 @@ export function overpassBuildings(elements, extent) {
   for (const element of elements) {
     if (element?.type !== "way" || !Array.isArray(element.geometry) || element.geometry.length < 4) continue
     const coordinates = element.geometry.map((point) => [coordinateNumber(point?.lon, -180, 180), coordinateNumber(point?.lat, -90, 90)])
-    if (coordinates.some((point) => point === null)) continue
+    if (coordinates.some(([longitude, latitude]) => longitude === null || latitude === null)) continue
     const normalizedCoordinates = coordinates
     if (normalizedCoordinates.length < 4 || normalizedCoordinates[0]?.[0] !== normalizedCoordinates.at(-1)?.[0] || normalizedCoordinates[0]?.[1] !== normalizedCoordinates.at(-1)?.[1]) continue
     const distinctVertices = new Set(normalizedCoordinates.slice(0, -1).map(([longitude, latitude]) => `${longitude},${latitude}`))
@@ -301,6 +302,12 @@ function coordinateNumber(value, minimum, maximum) {
 
 function validateExtent(extent) {
   if (!Array.isArray(extent) || extent.length !== 4 || !extent.every(Number.isFinite) || extent[0] < -180 || extent[2] > 180 || extent[1] < -90 || extent[3] > 90 || extent[0] >= extent[2] || extent[1] >= extent[3]) throw new Error("extent 必须是有效的 [west, south, east, north]")
+}
+
+function validateRegion(region) {
+  if (typeof region !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{1,79}$/.test(region)) {
+    throw new Error("region 必须是 2 到 80 位的字母、数字、下划线或短横线标识")
+  }
 }
 
 function roundCoordinate(value) { return Math.round(value * 1e7) / 1e7 }

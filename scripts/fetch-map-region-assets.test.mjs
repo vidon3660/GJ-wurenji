@@ -43,6 +43,36 @@ test("OSM building geometry is converted to WGS84 GeoJSON with stable height fie
   assert.equal(result.features[0].properties.heightEstimated, true)
 })
 
+test("OSM building extraction keeps intersecting buildings and rejects malformed coordinates", () => {
+  const result = overpassBuildings([
+    {
+      type: "way",
+      id: 201,
+      tags: { building: "yes", height: "20" },
+      geometry: [
+        { lon: 113.28, lat: 23.06 },
+        { lon: 113.33, lat: 23.06 },
+        { lon: 113.33, lat: 23.11 },
+        { lon: 113.28, lat: 23.11 },
+        { lon: 113.28, lat: 23.06 }
+      ]
+    },
+    {
+      type: "way",
+      id: 202,
+      tags: { building: "yes" },
+      geometry: [
+        { lon: 113.29, lat: 23.07 },
+        { lon: null, lat: 23.071 },
+        { lon: 113.291, lat: 23.07 },
+        { lon: 113.29, lat: 23.07 }
+      ]
+    }
+  ], [113.287, 23.067, 113.323, 23.103])
+
+  assert.deepEqual(result.features.map((feature) => feature.id), ["osm-building-201"])
+})
+
 test("building heights prefer metres and fall back to 3.2m per level", () => {
   assert.equal(parseBuildingHeight({ height: "24.5m", "building:levels": "2" }), 24.5)
   assert.equal(parseBuildingHeight({ "building:levels": "5" }), 16)
