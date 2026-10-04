@@ -52,6 +52,7 @@ function buildService(options: {
   const attempts = { findOne: vi.fn().mockResolvedValue(options.attempt) } as unknown as Repository<QuestionAttemptEntity>
   const responses = { find: vi.fn().mockResolvedValue(options.responses) } as unknown as Repository<QuestionResponseEntity>
   const activities = { record: vi.fn().mockResolvedValue(undefined) }
+  const evaluations = { findOne: vi.fn().mockResolvedValue(options.evaluation) } as unknown as Repository<ProjectEvaluationEntity>
   const service = new QuestionBankService(
     {} as Repository<never>,
     {} as Repository<QuestionBankEntity>,
@@ -60,7 +61,7 @@ function buildService(options: {
     responses,
     projects,
     {} as never,
-    {} as Repository<ProjectEvaluationEntity>,
+    evaluations,
     activities as never,
     { assertWritable: vi.fn().mockResolvedValue(undefined) } as never,
     dataSource
@@ -198,6 +199,20 @@ describe("QuestionBankService regrade", () => {
 
     expect(result.attempt).toMatchObject({ status: "SUBMITTED", revision: value.attempt.revision })
     expect(manager.save).not.toHaveBeenCalled()
+  })
+
+  it("hides assessment scores and evidence from students before the teacher publishes results", async () => {
+    const value = fixture()
+    value.project.snapshot.mode = "ASSESSMENT"
+    value.project.snapshot.config.resultVisibility = "FULL_REVIEW"
+    value.evaluation.status = "REVIEWED"
+    const { service } = buildService(value)
+    const student = { id: value.project.student.id, email: "student@example.com", displayName: "学生", role: "student" } as AuthUser
+
+    const result = await service.questionnaire(value.project.id, student)
+
+    expect(result.attempt).toMatchObject({ autoScore: 0, teacherScore: null, reviewComment: "" })
+    expect(result.responses.every((response) => response.autoScore === null && response.judgment === "UNANSWERED" && response.evidence.length === 0)).toBe(true)
   })
 
   it("does not expose answers or grading rules in the student questionnaire view", async () => {
