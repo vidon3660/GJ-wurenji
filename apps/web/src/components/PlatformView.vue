@@ -71,10 +71,22 @@ const serviceState = computed<"SYNCING" | "CONNECTED" | "ERROR">(() => {
 const serviceLabel = computed(() => serviceState.value === "SYNCING" ? "正在同步" : serviceState.value === "ERROR" ? "连接异常" : "教学服务正常")
 const serviceDetail = computed(() => serviceState.value === "SYNCING" ? "正在读取教学数据" : serviceState.value === "ERROR" ? "部分数据未能读取" : "班级与实训数据已同步")
 const onboardingStudentProject = computed(() => studentProjects.value.find((item) => item.status === "IN_PROGRESS") ?? studentProjects.value.find((item) => item.status === "NOT_STARTED") ?? studentProjects.value[0] ?? null)
-const onboardingMissionTitle = computed(() => onboardingMission.value?.action === "teacher-first-assignment" ? "创建首个场景任务" : "完成首个学生操作")
-const onboardingMissionDetail = computed(() => onboardingMission.value?.action === "teacher-first-assignment"
-  ? "在预设区域中选择一个区域，然后点击“用此区域创建任务”"
-  : "进入当前实训，开始或恢复阶段；仿真已开放时可进入仿真运行")
+const onboardingMissionTitle = computed(() => {
+  switch (onboardingMission.value?.action) {
+    case "teacher-first-question-bank": return "创建首套题库"
+    case "teacher-first-assignment": return "发布首个场景任务"
+    case "student-first-questionnaire": return "完成首份题库作答"
+    default: return "完成首个学生操作"
+  }
+})
+const onboardingMissionDetail = computed(() => {
+  switch (onboardingMission.value?.action) {
+    case "teacher-first-question-bank": return "进入题库管理，创建至少一道题并发布版本"
+    case "teacher-first-assignment": return "核对题库和任务条件，预检通过后点击“确认发布”"
+    case "student-first-questionnaire": return "进入当前实训，打开“题库”并提交一份作答"
+    default: return "进入当前实训，开始或恢复阶段；仿真已开放时可进入仿真运行"
+  }
+})
 const navItems = computed(() => isTeacher.value
   ? [
       { key: "home" as const, label: "教学概览", icon: DataBoard },
@@ -278,6 +290,7 @@ async function assignmentPublished() {
   activeSection.value = "home"
   wizardDraftId.value = ""
   await reloadV3()
+  if (onboardingMission.value?.action === "teacher-first-assignment") await completeOnboardingMission("teacher-first-assignment")
 }
 
 async function leaveWorkspace() {
@@ -304,7 +317,7 @@ function deferGuide() {
 
 function startGuideMission(action: OnboardingAction, sceneType: SceneType | null) {
   if (!onboarding.value) return
-  if (action === "student-first-stage" && !onboardingStudentProject.value) {
+  if ((action === "student-first-stage" || action === "student-first-questionnaire") && !onboardingStudentProject.value) {
     // A student can open the guide while the task list is refreshing. Keep the
     // guide visible until a real project exists instead of leaving a dead
     // mission banner that cannot be resumed.
@@ -323,6 +336,10 @@ function startGuideMission(action: OnboardingAction, sceneType: SceneType | null
 }
 
 function resumeOnboardingMission() {
+  if (onboardingMission.value?.action === "teacher-first-question-bank") {
+    activeSection.value = "question-banks"
+    return
+  }
   if (onboardingMission.value?.action === "teacher-first-assignment") {
     activeSection.value = "regions"
     return
@@ -378,8 +395,21 @@ function openRegionsFromWizard() {
   activeSection.value = "regions"
 }
 
-function handleStudentOnboardingAction(action: "stage-started" | "simulation-opened") {
+function handleQuestionBankPublished() {
+  if (onboardingMission.value?.action !== "teacher-first-question-bank" || !onboarding.value) return
+  const mission: OnboardingMission = { action: "teacher-first-assignment", sceneType: guidedSceneType.value }
+  onboardingMission.value = mission
+  saveOnboardingMission(onboardingStorage, props.user.id, onboarding.value, mission)
+  activeSection.value = "regions"
+  ElMessage.success("题库版本已发布，下一步请选择区域并发布首个任务")
+}
+
+function handleStudentOnboardingAction(action: "stage-started" | "simulation-opened" | "questionnaire-submitted") {
   if (action === "stage-started" || action === "simulation-opened") void completeOnboardingMission("student-first-stage")
+  if (action === "questionnaire-submitted") {
+    if (onboardingMission.value?.action === "student-first-questionnaire") void completeOnboardingMission("student-first-questionnaire")
+    else if (onboardingMission.value?.action === "student-first-stage") void completeOnboardingMission("student-first-stage")
+  }
 }
 
 function replayGuide() {
@@ -404,7 +434,7 @@ function handleUserCommand(command: string) {
 </script>
 
 <template>
-  <V3ProjectWorkspaceView v-if="activeSection === 'workspace' && workspaceTarget" :key="workspaceTarget.id" :user="user" :project-id="workspaceTarget.id" :initial-alert-id="workspaceTarget.alertId ?? ''" @back="leaveWorkspace" @onboarding-action="handleStudentOnboardingAction" />
+  <V3ProjectWorkspaceView v-if="activeSection === 'workspace' && workspaceTarget" :key="workspaceTarget.id" :user="user" :project-id="workspaceTarget.id" :initial-alert-id="workspaceTarget.alertId ?? ''" :initial-open-questionnaire="onboardingMission?.action === 'student-first-questionnaire'" @back="leaveWorkspace" @onboarding-action="handleStudentOnboardingAction" />
   <div v-else class="platform-shell">
     <header class="platform-header">
       <div class="platform-brand"><span>GJ</span><div><strong>高巨低空</strong><small>无人集群仿真教学平台</small></div></div>
@@ -490,9 +520,9 @@ function handleUserCommand(command: string) {
       <V3ResourcePackageManagementView v-else-if="activeSection === 'resources' && user.role === 'admin'" />
       <V3TeachingProgressView v-else-if="activeSection === 'progress' && isTeacher" :initial-alert-state="progressAlertState" :initial-submission-state="progressSubmissionState" :initial-evaluation-state="progressEvaluationState" :teaching-overview="teachingOverview" @project="openV3Project" />
       <ClassManagementView v-else-if="activeSection === 'classes' && isTeacher" :teaching-overview="teachingOverview" @create-assignment="openAssignmentWizard" @edit-assignment="editAssignment" @view-progress="navigate('progress')" @project="openV3Project" @changed="retryPlatformData" />
-      <QuestionBankManagementView v-else-if="activeSection === 'question-banks' && isTeacher" />
+      <QuestionBankManagementView v-else-if="activeSection === 'question-banks' && isTeacher" @published="handleQuestionBankPublished" />
     </main>
-    <V3AssignmentWizard v-if="isTeacher" :key="assignmentWizardKey" v-model:visible="showAssignmentWizard" :initial-scene-type="wizardSceneType" :initial-region-id="wizardRegionId" :initial-draft-id="wizardDraftId" @opened="completeOnboardingMission('teacher-first-assignment')" @published="assignmentPublished" @open-regions="openRegionsFromWizard" />
+    <V3AssignmentWizard v-if="isTeacher" :key="assignmentWizardKey" v-model:visible="showAssignmentWizard" :initial-scene-type="wizardSceneType" :initial-region-id="wizardRegionId" :initial-draft-id="wizardDraftId" @published="assignmentPublished" @open-regions="openRegionsFromWizard" />
   </div>
   <OnboardingGuide v-if="showGuide && onboarding" :user="user" :state="onboarding" :student-scene-type="onboardingStudentProject?.sceneType ?? null" :student-has-project="Boolean(onboardingStudentProject)" @done="finishGuide" @later="deferGuide" @start="startGuideMission" />
   <section v-if="onboardingMission" class="onboarding-mission" role="status" aria-live="polite" :data-onboarding-mission="onboardingMission.action">
