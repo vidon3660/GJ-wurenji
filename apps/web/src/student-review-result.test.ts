@@ -9,7 +9,7 @@ const evaluation: V3ProjectEvaluationView = {
   rubricVersion: "LOGISTICS-1.0",
   objectiveMetrics: [],
   teacherScores: [],
-  studentSummary: "学生复盘",
+  studentSummary: "学生运行分析",
   studentSubmittedAt: "2026-08-14T00:00:00.000Z",
   summary: "",
   totalScore: 86,

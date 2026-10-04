@@ -65,7 +65,7 @@ describe("offline region map readiness", () => {
       buildingCount: 1,
       obstacleCount: 1,
       missingHeightCount: 1,
-      message: "建筑物/障碍物可用于教学表达，但尚未达到正式权威资源验收"
+      message: "建筑物/障碍物可用于教学表达，但尚未达到正式资源验收"
     })
   })
 

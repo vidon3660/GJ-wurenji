@@ -8,7 +8,7 @@ describe("logistics task summary", () => {
 
     expect(summary).toMatchObject({
       projectBackground: "保障城区药品配送",
-      completionRequirements: "完成规划、调度、运行和复盘",
+      completionRequirements: "完成规划、调度、运行和结果分析",
       mode: "考核模式",
       fleetTemplate: "10 架物流机群（LOGISTICS_10）",
       centerAirport: "城北物流机场",
@@ -68,7 +68,7 @@ function config(): AssignmentDraftConfig {
     taskBrief: "规划安全高效的物流配送方案",
     logisticsParameters: {
       projectBackground: "保障城区药品配送",
-      completionRequirements: "完成规划、调度、运行和复盘",
+      completionRequirements: "完成规划、调度、运行和结果分析",
       plannedStartAt: "2026-08-20T01:00:00.000Z",
       plannedEndAt: "2026-08-20T09:00:00.000Z"
     },

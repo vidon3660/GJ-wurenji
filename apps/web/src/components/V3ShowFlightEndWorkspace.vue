@@ -15,6 +15,7 @@ const completionStatus = ref<"NORMAL" | "ABNORMAL" | "ABORTED">("NORMAL")
 const normalLandedCount = ref(0)
 const abnormalCount = ref(0)
 const abnormalDescription = ref("")
+const submitConfirming = ref(false)
 const canSubmit = computed(() => Boolean(report.value?.canSubmit && (props.user.role !== "student" || props.project.assessmentTiming.canWrite)))
 
 onMounted(load)
@@ -38,10 +39,13 @@ async function load() {
 }
 
 async function saveEndReport() {
+  if (loading.value) return
   await persist(false)
 }
 
 async function submitEndReport() {
+  if (loading.value || submitConfirming.value || !canSubmit.value) return
+  submitConfirming.value = true
   try {
     await ElMessageBox.confirm("确认提交飞行结束报备？提交后将进入飞后运行评估阶段。", "提交飞行结束报备", {
       confirmButtonText: "确认提交",
@@ -49,13 +53,15 @@ async function submitEndReport() {
       type: "warning"
     })
   } catch {
+    submitConfirming.value = false
     return
   }
+  submitConfirming.value = false
   await persist(true)
 }
 
 async function persist(submitValue: boolean) {
-  if (!report.value) return
+  if (!report.value || loading.value) return
   loading.value = true
   try {
     report.value = await api<ShowFlightEndReportView>(`/v3/show-projects/${props.project.id}/flight-end-report${submitValue ? "/submit" : ""}`, {
@@ -87,13 +93,13 @@ function formatTime(value: string | null) {
   <section class="flight-end-workspace" v-loading="loading">
     <header>
       <div><span>FLIGHT END REPORT</span><h2>飞行结束报备</h2><p>{{ report?.status === 'SUBMITTED' ? '信息已提交' : '降落清点与异常确认' }}</p></div>
-      <el-button :icon="Refresh" circle title="刷新" @click="load" />
+      <el-button :icon="Refresh" circle title="刷新" :loading="loading" :disabled="loading" @click="load" />
     </header>
 
-    <div v-if="loadError && !report" class="flight-end-load-error flight-end-load-error-full" role="alert" aria-live="assertive"><span><strong>飞行结束报备加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的报备数据，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="loading" @click="load">重新加载报备</el-button></div>
+    <div v-if="loadError && !report" class="flight-end-load-error flight-end-load-error-full" role="alert" aria-live="assertive"><span><strong>飞行结束报备加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的报备数据，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="loading" :disabled="loading" @click="load">重新加载报备</el-button></div>
 
     <main v-if="report || !loadError">
-      <div v-if="loadError && report" class="flight-end-load-error" role="alert" aria-live="assertive"><span><strong>报备数据同步失败</strong><small>{{ loadError }}</small><p>当前页面数据已保留，可继续查看；重新加载成功后再保存或提交。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" @click="load">重试同步</el-button></div>
+      <div v-if="loadError && report" class="flight-end-load-error" role="alert" aria-live="assertive"><span><strong>报备数据同步失败</strong><small>{{ loadError }}</small><p>当前页面数据已保留，可继续查看；重新加载成功后再保存或提交。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" :disabled="loading" @click="load">重试同步</el-button></div>
       <section class="flight-end-summary">
         <div><span>计划架数</span><strong>{{ report?.plannedCount ?? 0 }}</strong></div>
         <div><span>实际起飞</span><strong>{{ report?.actualTakeoffCount ?? 0 }}</strong></div>
@@ -107,13 +113,13 @@ function formatTime(value: string | null) {
       <section class="flight-end-form">
         <header><strong>降落清点与项目完成确认</strong><span>{{ (normalLandedCount ?? 0) + (abnormalCount ?? 0) }} / {{ report?.actualTakeoffCount ?? 0 }}</span></header>
         <div class="completion-options">
-          <button v-for="item in [{ code: 'NORMAL', label: '正常完成' }, { code: 'ABNORMAL', label: '存在异常' }, { code: 'ABORTED', label: '运行中止' }]" :key="item.code" type="button" :class="{ active: completionStatus === item.code }" :disabled="!canSubmit" @click="completionStatus = item.code as typeof completionStatus"><i /><strong>{{ item.label }}</strong></button>
+          <button v-for="item in [{ code: 'NORMAL', label: '正常完成' }, { code: 'ABNORMAL', label: '存在异常' }, { code: 'ABORTED', label: '运行中止' }]" :key="item.code" type="button" :class="{ active: completionStatus === item.code }" :disabled="!canSubmit || loading || submitConfirming" @click="completionStatus = item.code as typeof completionStatus"><i /><strong>{{ item.label }}</strong></button>
         </div>
         <div class="count-inputs">
-          <label><span>正常降落数量</span><el-input-number v-model="normalLandedCount" :min="0" :max="report?.actualTakeoffCount ?? 0" :disabled="!canSubmit" /></label>
-          <label><span>异常数量</span><el-input-number v-model="abnormalCount" :min="0" :max="report?.actualTakeoffCount ?? 0" :disabled="!canSubmit" /></label>
+          <label><span>正常降落数量</span><el-input-number v-model="normalLandedCount" :min="0" :max="report?.actualTakeoffCount ?? 0" :disabled="!canSubmit || loading || submitConfirming" /></label>
+          <label><span>异常数量</span><el-input-number v-model="abnormalCount" :min="0" :max="report?.actualTakeoffCount ?? 0" :disabled="!canSubmit || loading || submitConfirming" /></label>
         </div>
-        <label><span>异常说明</span><el-input v-model="abnormalDescription" type="textarea" :rows="5" maxlength="2000" show-word-limit :disabled="!canSubmit" /></label>
+        <label><span>异常说明</span><el-input v-model="abnormalDescription" type="textarea" :rows="5" maxlength="2000" show-word-limit :disabled="!canSubmit || loading || submitConfirming" /></label>
       </section>
       <section v-if="report?.status === 'SUBMITTED'" class="flight-end-authority">
         <header><strong>系统清点结果</strong><el-tag :type="report.answerCorrect ? 'success' : 'danger'">{{ report.answerCorrect ? '判定正确' : '需处理' }}</el-tag></header>
@@ -131,7 +137,7 @@ function formatTime(value: string | null) {
         <div><dt>系统判定</dt><dd>{{ report?.answerCorrect === null ? '待提交' : report?.answerCorrect ? '清点正确' : '清点需处理' }}</dd></div>
         <div><dt>提交人</dt><dd>{{ report?.submittedBy ?? '待提交' }}</dd></div>
       </dl>
-      <footer v-if="canSubmit && user.role === 'student'"><el-button native-type="button" :icon="Upload" @click="saveEndReport">保存草稿</el-button><el-button native-type="button" type="primary" @click="submitEndReport">提交结束报备</el-button></footer>
+      <footer v-if="canSubmit && user.role === 'student'"><el-button native-type="button" :icon="Upload" :loading="loading" :disabled="loading || submitConfirming" @click="saveEndReport">保存草稿</el-button><el-button native-type="button" type="primary" :loading="loading || submitConfirming" :disabled="loading || submitConfirming" @click="submitEndReport">提交结束报备</el-button></footer>
       <div v-else class="flight-end-readonly"><strong>{{ user.role === 'student' ? '结束报备已锁定' : '教师只读查看' }}</strong><span>{{ report?.status === 'SUBMITTED' ? '学生已完成本阶段' : '等待学生完成报备' }}</span></div>
     </aside>
   </section>

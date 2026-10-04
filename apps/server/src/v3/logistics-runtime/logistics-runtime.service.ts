@@ -79,6 +79,7 @@ import { adaptRuntimeClock } from "../runtime/runtime-adapters.js"
 import { assessmentTimingForProject } from "../assessment/assessment-window.service.js"
 import { fixedTickSimulationTime } from "../runtime/runtime-clock.js"
 import { persistRejectedRuntimeAction } from "../runtime/runtime-action-failure.js"
+import { clearUnpublishedObjectiveMetrics } from "../runtime/runtime-evaluation.js"
 import { logisticsActionBusinessOutcome, logisticsActionWithinDeadline } from "./logistics-action-outcome.js"
 import { assertLogisticsActionContextPending } from "./logistics-action-context.js"
 import { assertSameLogisticsActionRequest, logisticsActionPayload, logisticsActionTargetType, type LogisticsActionRequestIdentity } from "./logistics-action-idempotency.js"
@@ -232,6 +233,7 @@ export class LogisticsRuntimeService {
         startedAt: null,
         endedAt: null
       }))
+      await clearUnpublishedObjectiveMetrics(manager, projectId)
       await this.saveSnapshot(manager, project, session, checkpoint, "READY")
       await this.activities.record(manager, {
         assignmentId: project.snapshot.draft.id,
@@ -790,6 +792,7 @@ export class LogisticsRuntimeService {
       startedAt: null,
       endedAt: null
     }))
+    await clearUnpublishedObjectiveMetrics(manager, project.id)
     await this.activities.record(manager, {
       assignmentId: project.snapshot.draft.id,
       projectId: project.id,

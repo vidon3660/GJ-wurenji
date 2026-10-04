@@ -369,6 +369,10 @@ export class ResourcePackageService {
     } catch (error) {
       throw new BadRequestException(normalizeError(error))
     }
+    const failedChecks = parsed.checks.filter((check) => !check.passed)
+    if (failedChecks.length > 0) {
+      throw new BadRequestException(`舞步轨迹空间校验未通过：${failedChecks.map((check) => check.message).join("；")}`)
+    }
     if (await this.packages.findOne({ where: { packageType: "SHOW_PROGRAM", name, version } })) {
       throw new ConflictException("同名同版本表演程序已存在")
     }
@@ -587,6 +591,10 @@ export class ResourcePackageService {
     }
     const item = await manager.findOne(ResourcePackageEntity, { where: { id: selectedId, packageType: "SHOW_PROGRAM", status: "ACTIVE" } })
     if (!item || !isShowProgramManifest(item.manifest)) throw new ConflictException("舞步程序不存在、未激活或内容无效")
+    const failedChecks = Array.isArray(item.validationChecks)
+      ? (item.validationChecks as unknown as V3ResourceValidationCheck[]).filter((check) => !check.passed)
+      : []
+    if (failedChecks.length > 0) throw new ConflictException(`舞步程序空间校验未通过：${failedChecks.map((check) => check.message).join("；")}`)
     const expectedAircraft = showTemplateAircraftCount(config.scaleTemplateCode)
     if (item.manifest.aircraftCount !== expectedAircraft) {
       throw new BadRequestException(`舞步程序包含 ${item.manifest.aircraftCount} 架无人机，与 ${expectedAircraft} 架固定规模模板不一致`)
@@ -595,6 +603,15 @@ export class ResourcePackageService {
     if (maximumHeightMeters !== undefined && item.manifest.maximumAltitudeMeters > maximumHeightMeters) {
       throw new BadRequestException(`舞步程序最大高度 ${item.manifest.maximumAltitudeMeters} m 超过任务限制 ${maximumHeightMeters} m`)
     }
+  }
+
+  async showProgramValidationChecks(
+    packageId: string | null | undefined,
+    manager: EntityManager = this.packages.manager
+  ): Promise<V3ResourceValidationCheck[]> {
+    if (!packageId) return []
+    const item = await manager.findOne(ResourcePackageEntity, { where: { id: packageId, packageType: "SHOW_PROGRAM" } })
+    return Array.isArray(item?.validationChecks) ? item.validationChecks as unknown as V3ResourceValidationCheck[] : []
   }
 
   async planActiveReferenceUpgrade(
@@ -783,14 +800,14 @@ export class ResourcePackageService {
 
   private async assertArchiveTrustedForActivation(item: ResourcePackageEntity): Promise<void> {
     if (item.source === "IMPORTED_TRAJECTORY") {
-      if (!item.archiveAsset || !isShowProgramManifest(item.manifest)) throw new ConflictException("导入舞步程序缺少可追溯源文件或有效摘要")
+      if (!item.archiveAsset || !isShowProgramManifest(item.manifest)) throw new ConflictException("导入舞步程序缺少原始文件或有效摘要")
       try {
         const source = await this.storage.read(item.archiveAsset.objectKey, item.archiveAsset.storageProvider)
         if (sha256(source) !== item.sha256 || item.archiveAsset.sha256 !== item.sha256) throw new Error("源文件 SHA-256 与资源记录不一致")
         const reparsed = parseShowProgramCsv(source, item.manifest.sourceSoftware)
         if (canonicalJson(reparsed.manifest) !== canonicalJson(item.manifest)) throw new Error("重新解析结果与导入摘要不一致")
       } catch (error) {
-        throw new ConflictException(`舞步程序激活前完整性复核失败：${normalizeError(error)}`)
+        throw new ConflictException(`舞步程序激活前完整性检查失败：${normalizeError(error)}`)
       }
       return
     }

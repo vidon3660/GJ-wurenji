@@ -41,6 +41,7 @@ import { mergeRuntimeAlertPayload } from "../runtime/runtime-alert-payload.js"
 import { adaptRuntimeClock } from "../runtime/runtime-adapters.js"
 import { fixedTickSimulationTime } from "../runtime/runtime-clock.js"
 import { persistRejectedRuntimeAction } from "../runtime/runtime-action-failure.js"
+import { clearUnpublishedObjectiveMetrics } from "../runtime/runtime-evaluation.js"
 import { vtlActionBusinessOutcome, vtlActionWithinDeadline } from "./vtl-action-outcome.js"
 import { configuredVtlEvents, vtlActionDeadlineSeconds, vtlEventDefinition } from "./vtl-event-catalog.js"
 import { VtlReorganizationEntity, VtlRuntimeSnapshotEntity } from "./vtl-runtime.entities.js"
@@ -1221,6 +1222,7 @@ export class VtlRuntimeService {
       startedAt: null,
       endedAt: null
     }))
+    await clearUnpublishedObjectiveMetrics(manager, project.id)
     await this.activityLog.record(manager, {
       assignmentId: project.snapshot.draft.id,
       projectId: project.id,

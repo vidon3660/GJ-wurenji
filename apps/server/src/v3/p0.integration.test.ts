@@ -690,7 +690,7 @@ describe.runIf(integrationEnabled)("V3 P0 integration", () => {
 function showParameters() {
   return {
     projectBackground: "城市节庆编队表演教学项目",
-    completionRequirements: "完成区域规划、飞行申报、运行处置和飞后复盘",
+    completionRequirements: "完成区域规划、飞行申报、运行处置和飞后结果分析",
     plannedStartAt: new Date(Date.now() + 3_600_000).toISOString(),
     plannedEndAt: new Date(Date.now() + 5_400_000).toISOString(),
     plannedAudienceCount: 3000,

@@ -260,7 +260,10 @@ async function loadQuestionnaire(showError = false) {
 }
 
 async function openQuestionnaire() {
-  if (!questionnaireEntryVisible.value) return
+  // The drawer button remains in the header while the first request is in
+  // flight. Prevent a second click from starting another request whose late
+  // response could replace the latest scenario result.
+  if (!questionnaireEntryVisible.value || questionnaireLoading.value || questionnaireVisible.value) return
   questionnaireVisible.value = true
   await loadQuestionnaire(true)
   notifyQuestionnaireResultViewed()
@@ -461,6 +464,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
         title="场景任务方案与仿真结果"
         :aria-label="`场景任务方案与仿真结果：${questionnaireLoading ? '加载中' : questionnaire?.attempt?.status === 'SUBMITTED' ? '方案已提交，等待教师评分' : questionnaire?.attempt?.status === 'GRADED' ? '仿真计算已完成' : questionnaire?.canEdit ? '可继续编辑方案' : '只读查看'}`"
         :aria-busy="questionnaireLoading"
+        :disabled="questionnaireLoading"
         @click="openQuestionnaire"
       >
         <el-icon><DocumentChecked /></el-icon><span>方案</span>

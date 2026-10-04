@@ -31,7 +31,7 @@ import { ActivityLogService } from "../v3/activities/activity-log.service.js"
 import { AssessmentWindowService, assessmentTimingForProject } from "../v3/assessment/assessment-window.service.js"
 import { canonicalJson } from "../v3/common/canonical-json.js"
 import { normalizeReviewResultVisibility } from "../v3/show-review/review-visibility.js"
-import { ProjectEvaluationEntity } from "../v3/runtime/runtime.entities.js"
+import { ProjectEvaluationEntity, RuntimeSessionEntity } from "../v3/runtime/runtime.entities.js"
 import { AssignmentSnapshotEntity, StudentProjectEntity } from "../v3/assignments/assignment.entities.js"
 import {
   QuestionAttemptEntity,
@@ -525,7 +525,7 @@ export class QuestionBankService {
       }
       assertRevision(input.expectedRevision, attempt.revision)
       const evaluation = await manager.findOne(ProjectEvaluationEntity, { where: { projectId: project.id } })
-      const metrics = (evaluation?.objectiveMetrics ?? []) as unknown as ShowObjectiveMetricView[]
+      const metrics = await this.currentSimulationMetrics(manager, project.id, evaluation)
       const existingResponses = await manager.find(QuestionResponseEntity, { where: { attempt: { id: attempt.id } } })
       const graded = this.gradeResponses(manager, attempt, questions, existingResponses, responseByCode, metrics, true)
       await manager.save(QuestionResponseEntity, graded.responses)
@@ -564,7 +564,7 @@ export class QuestionBankService {
       if (attempt.status !== "SUBMITTED" && attempt.status !== "GRADED") throw new ConflictException("只有已提交且尚未完成教师复核的作答才能重新判定")
       assertRevision(input.expectedRevision, attempt.revision)
       const evaluation = await manager.findOne(ProjectEvaluationEntity, { where: { projectId: project.id } })
-      const metrics = (evaluation?.objectiveMetrics ?? []) as unknown as ShowObjectiveMetricView[]
+      const metrics = await this.currentSimulationMetrics(manager, project.id, evaluation)
       const questions = normalizeQuestionDefinitions(version.questions, true)
       const existingResponses = await manager.find(QuestionResponseEntity, { where: { attempt: { id: attempt.id } } })
       const answerByCode = new Map(existingResponses.map((response) => [response.questionCode, response.answer]))
@@ -692,7 +692,7 @@ export class QuestionBankService {
       const existingResponses = await manager.find(QuestionResponseEntity, { where: { attempt: { id: attempt.id } } })
       if (!existingResponses.some((response) => response.judgment === "PENDING")) return
       const evaluation = await manager.findOne(ProjectEvaluationEntity, { where: { projectId } })
-      const metrics = (evaluation?.objectiveMetrics ?? []) as unknown as ShowObjectiveMetricView[]
+      const metrics = await this.currentSimulationMetrics(manager, projectId, evaluation)
       const questions = normalizeQuestionDefinitions(version.questions, true)
       const answerByCode = new Map(existingResponses.map((response) => [response.questionCode, response.answer]))
       const previousStateByCode = new Map(existingResponses.map((response) => [response.questionCode, {
@@ -727,6 +727,27 @@ export class QuestionBankService {
         result: { status: attempt.status, autoScore: attempt.autoScore, maxScore: attempt.maxScore }
       })
     })
+  }
+
+  /**
+   * Keep automatic simulation grading tied to the latest runtime attempt.
+   * ProjectEvaluation is a single mutable row; without this check a new READY
+   * or RUNNING session could reuse metrics written for a previous attempt.
+   */
+  private async currentSimulationMetrics(
+    manager: EntityManager,
+    projectId: string,
+    evaluation: ProjectEvaluationEntity | null
+  ): Promise<ShowObjectiveMetricView[]> {
+    const metrics = (evaluation?.objectiveMetrics ?? []) as unknown as ShowObjectiveMetricView[]
+    if (!evaluation || metrics.length === 0) return metrics
+    const session = await manager.findOne(RuntimeSessionEntity, { where: { projectId }, order: { attemptNo: "DESC" } })
+    // Legacy projects without a runtime session keep their existing grading
+    // behaviour. V3 runtime projects always create a session before running.
+    if (!session) return metrics
+    if (!["COMPLETED", "ABORTED", "FAILED"].includes(session.status)) return []
+    if (evaluation.updatedAt instanceof Date && session.createdAt instanceof Date && evaluation.updatedAt < session.createdAt) return []
+    return metrics
   }
 
   private async serializeBankSummary(bank: QuestionBankEntity, suppliedVersions?: QuestionBankVersionEntity[]): Promise<QuestionBankSummary> {

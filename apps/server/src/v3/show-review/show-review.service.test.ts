@@ -46,6 +46,17 @@ describe("show review metrics and replay", () => {
     expect(metrics.find((item) => item.code === "MISSION_RESULT")).toMatchObject({ value: "COMPLETED", state: "PASS" })
   })
 
+  it("surfaces imported trajectory space checks in the objective metrics", () => {
+    const metrics = computeShowObjectiveMetrics({
+      session: { status: "COMPLETED" } as RuntimeSessionEntity,
+      events: [],
+      alerts: [],
+      actions: [],
+      reports: []
+    }, [{ code: "SHOW_PROGRAM_AIR_CONFLICT", passed: false, message: "存在机间距不足" }])
+    expect(metrics.find((item) => item.code === "PROGRAM_SPATIAL_CHECK")).toMatchObject({ value: "不通过", state: "RISK", detail: expect.stringContaining("存在机间距不足") })
+  })
+
   it("merges state, event, alert, action and reporting evidence chronologically", () => {
     const correlationId = "00000000-0000-0000-0000-000000000001"
     const timeline = buildShowReplayTimeline({

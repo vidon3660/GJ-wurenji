@@ -85,4 +85,57 @@ describe("evaluateSpatialRisk", () => {
     ]]))
     expect(result.some((finding) => finding.code === "NO_FLY_INTRUSION" && finding.objectIds.includes("zone-test"))).toBe(true)
   })
+
+  it("does not compare a route before its takeoff delay as airborne", () => {
+    const scene = createDemoScene()
+    scene.obstacles = []
+    scene.noFlyZones = []
+    scene.rules.horizontalSeparationMeters = 20
+    scene.rules.verticalSeparationMeters = 10
+    const center = { ...scene.takeoffPoint, altitude: 80 }
+    const result = evaluateSpatialRisk(scene, plan(scene, [
+      [
+        { id: "delayed-start", position: center, speedMps: 20, waitSeconds: 0 },
+        { id: "delayed-end", position: { ...center, longitude: center.longitude + 0.001 }, speedMps: 20, waitSeconds: 0 }
+      ],
+      [
+        { id: "active-start", position: center, speedMps: 20, waitSeconds: 0 },
+        { id: "active-end", position: { ...center, latitude: center.latitude + 0.001 }, speedMps: 20, waitSeconds: 0 }
+      ]
+    ], [10, 0]))
+    expect(result.some((finding) => finding.code === "AIR_CONFLICT")).toBe(false)
+  })
+
+  it("finds a vertical separation conflict inside a long horizontal overlap", () => {
+    const scene = createDemoScene()
+    scene.obstacles = []
+    scene.noFlyZones = []
+    scene.rules.horizontalSeparationMeters = 20
+    scene.rules.verticalSeparationMeters = 10
+    const center = { ...scene.takeoffPoint, altitude: 80 }
+    const result = evaluateSpatialRisk(scene, plan(scene, [
+      [
+        { id: "left-start", position: { ...center, longitude: center.longitude - 0.00005, altitude: 0 }, speedMps: 0.5, waitSeconds: 0 },
+        { id: "left-end", position: { ...center, longitude: center.longitude + 0.00005, altitude: 0 }, speedMps: 0.5, waitSeconds: 0 }
+      ],
+      [
+        { id: "right-start", position: { ...center, altitude: 100 }, speedMps: 20, waitSeconds: 0 },
+        { id: "right-end", position: { ...center, altitude: 0 }, speedMps: 20, waitSeconds: 0 }
+      ]
+    ]))
+    expect(result.some((finding) => finding.code === "AIR_CONFLICT")).toBe(true)
+  })
+
+  it("marks a configured terrain check unavailable when an endpoint lacks elevation", () => {
+    const scene = createDemoScene()
+    scene.obstacles = []
+    scene.noFlyZones = []
+    scene.rules.minimumTerrainClearanceMeters = 20
+    const result = evaluateSpatialRisk(scene, plan(scene, [[
+      { id: "start", position: { ...scene.takeoffPoint, altitude: 60, groundHeightMeters: 10 }, speedMps: 20, waitSeconds: 0 },
+      { id: "end", position: { ...scene.landingPoint, altitude: 60 }, speedMps: 20, waitSeconds: 0 }
+    ]]))
+    expect(result.some((finding) => finding.code === "GROUND_CLEARANCE_UNAVAILABLE")).toBe(true)
+    expect(result.some((finding) => finding.code === "GROUND_CLEARANCE")).toBe(false)
+  })
 })

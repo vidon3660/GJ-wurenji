@@ -84,6 +84,7 @@ import { adaptRuntimeClock } from "../runtime/runtime-adapters.js"
 import { assessmentTimingForProject } from "../assessment/assessment-window.service.js"
 import { fixedTickSimulationTime } from "../runtime/runtime-clock.js"
 import { persistRejectedRuntimeAction } from "../runtime/runtime-action-failure.js"
+import { clearUnpublishedObjectiveMetrics } from "../runtime/runtime-evaluation.js"
 
 interface RuntimeCheckpoint {
   schemaVersion: 1
@@ -214,6 +215,7 @@ export class ShowRuntimeService {
         startedAt: null,
         endedAt: null
       }))
+      await clearUnpublishedObjectiveMetrics(manager, projectId)
       await this.activities.record(manager, {
         assignmentId: project.snapshot.draft.id,
         projectId,
@@ -786,6 +788,7 @@ export class ShowRuntimeService {
       endedAt: null
     })
     await manager.save(session)
+    await clearUnpublishedObjectiveMetrics(manager, project.id)
     await this.activities.record(manager, {
       assignmentId: project.snapshot.draft.id,
       projectId: project.id,

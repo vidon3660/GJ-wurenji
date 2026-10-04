@@ -34,7 +34,7 @@ const defaultRubrics: Record<SceneType, EvaluationRubricDefinition> = {
       item("PREFLIGHT_REPORTING", "飞前判断与动态报备", 15, "TEA-024 飞前判断"),
       item("RISK_DECISION", "运行风险识别与决策", 25, "TEA-024 运行处置"),
       item("PROCEDURE_RESULT", "运行处置流程与结果", 15, "TEA-024 运行处置"),
-      item("REVIEW_QUALITY", "飞后复盘质量", 15, "需求规格说明书 13.3")
+      item("REVIEW_QUALITY", "飞后运行分析质量", 15, "需求规格说明书 13.3")
     ]
   },
   CITY_LOGISTICS: {
@@ -48,7 +48,7 @@ const defaultRubrics: Record<SceneType, EvaluationRubricDefinition> = {
       item("ORDER_SCHEDULING", "订单与机群调度", 20, "TEA-028 订单与调度"),
       item("RUNTIME_MONITORING", "运行监控与时序管理", 15, "需求规格说明书 12.2"),
       item("EMERGENCY_RESOLUTION", "应急处置与动态重调度", 20, "需求规格说明书 13.2"),
-      item("REVIEW_QUALITY", "复盘质量与改进建议", 10, "需求规格说明书 13.3")
+      item("REVIEW_QUALITY", "运行结果分析与改进建议", 10, "需求规格说明书 13.3")
     ]
   },
   VTOL_INSPECTION: {
@@ -63,7 +63,7 @@ const defaultRubrics: Record<SceneType, EvaluationRubricDefinition> = {
       item("EXECUTION_PLAN", "检查与执行计划", 15, "VTL-005"),
       item("RUNTIME_MONITORING", "三级态势与运行观察", 15, "VTL-006"),
       item("EMERGENCY_REORGANIZATION", "事件处置与集群重组", 10, "VTL-007"),
-      item("REVIEW_QUALITY", "巡检复盘质量", 10, "VTL-008")
+      item("REVIEW_QUALITY", "巡检结果分析质量", 10, "VTL-008")
     ]
   }
 }

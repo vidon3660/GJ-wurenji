@@ -22,7 +22,7 @@ describe("REPORT evaluation rubric", () => {
       ["PREFLIGHT_REPORTING", "飞前判断与动态报备", 15],
       ["RISK_DECISION", "运行风险识别与决策", 25],
       ["PROCEDURE_RESULT", "运行处置流程与结果", 15],
-      ["REVIEW_QUALITY", "飞后复盘质量", 15]
+      ["REVIEW_QUALITY", "飞后运行分析质量", 15]
     ])
     expect(rubric.items.reduce((total, item) => total + item.maxScore, 0)).toBe(100)
   })

@@ -1,6 +1,6 @@
 import type { BoxObstacle, GeoPoint, MissionPlan, PracticeScene } from "@wurenji/shared"
 
-export type SpatialRiskCode = "BUILDING_COLLISION" | "AIR_CONFLICT" | "GROUND_CLEARANCE" | "NO_FLY_INTRUSION"
+export type SpatialRiskCode = "BUILDING_COLLISION" | "AIR_CONFLICT" | "GROUND_CLEARANCE" | "GROUND_CLEARANCE_UNAVAILABLE" | "NO_FLY_INTRUSION"
 
 export interface SpatialRiskFinding {
   code: SpatialRiskCode
@@ -9,8 +9,8 @@ export interface SpatialRiskFinding {
   timeSeconds: number
   durationSeconds: number
   position: GeoPoint
-  measuredValue: number
-  thresholdValue: number
+  measuredValue: number | null
+  thresholdValue: number | null
   message: string
 }
 
@@ -48,8 +48,17 @@ function routeSegments(scene: PracticeScene, drone: MissionPlan["dronePlans"][nu
     const distance = distance3d(start, end)
     const speed = Math.max(0.5, Math.min(to.speedMps, scene.aircraft.maxSpeedMps))
     const duration = distance / speed
-    segments.push({ start, end, startTime: time, endTime: time + duration, startGeo: from.position, endGeo: to.position })
-    time += duration + Math.max(0, to.waitSeconds)
+    const endTime = time + duration
+    segments.push({ start, end, startTime: time, endTime, startGeo: from.position, endGeo: to.position })
+    time = endTime
+    const waitSeconds = Math.max(0, to.waitSeconds)
+    if (waitSeconds > 0) {
+      // A wait at an airborne waypoint is an occupied, stationary interval;
+      // retaining it in the timeline prevents a second aircraft from being
+      // compared against a route that has already advanced to its next leg.
+      segments.push({ start: end, end, startTime: time, endTime: time + waitSeconds, startGeo: to.position, endGeo: to.position })
+      time += waitSeconds
+    }
   }
   return segments
 }
@@ -96,7 +105,19 @@ function checkRouteFeatures(scene: PracticeScene, droneId: string, segments: Tim
     const clearanceLimit = scene.rules.minimumTerrainClearanceMeters
     const groundStart = segment.startGeo.groundHeightMeters
     const groundEnd = segment.endGeo.groundHeightMeters
-    if (clearanceLimit !== undefined && Number.isFinite(groundStart) && Number.isFinite(groundEnd)) {
+    if (clearanceLimit !== undefined && (!Number.isFinite(groundStart) || !Number.isFinite(groundEnd))) {
+      findings.push({
+        code: "GROUND_CLEARANCE_UNAVAILABLE",
+        droneIds: [droneId],
+        objectIds: [scene.id],
+        timeSeconds: segment.startTime,
+        durationSeconds: segment.endTime - segment.startTime,
+        position: toGeo(scene.origin, segment.start),
+        measuredValue: null,
+        thresholdValue: clearanceLimit,
+        message: `${droneId} 的航段缺少完整地面高程，无法判定地面净空`
+      })
+    } else if (clearanceLimit !== undefined && Number.isFinite(groundStart) && Number.isFinite(groundEnd)) {
       const startClearance = segment.startGeo.altitude - groundStart!
       const endClearance = segment.endGeo.altitude - groundEnd!
       const clearance = Math.min(startClearance, endClearance)
@@ -130,6 +151,9 @@ function checkAirSeparation(scene: PracticeScene, routeMap: Map<string, TimedSeg
         const startTime = times[index]!
         const endTime = times[index + 1]!
         if (endTime <= startTime) continue
+        const leftActive = activeAt(leftSegments, (startTime + endTime) / 2)
+        const rightActive = activeAt(rightSegments, (startTime + endTime) / 2)
+        if (!leftActive || !rightActive) continue
         const leftStart = positionAt(leftSegments, startTime)
         const leftEnd = positionAt(leftSegments, endTime)
         const rightStart = positionAt(rightSegments, startTime)
@@ -143,18 +167,24 @@ function checkAirSeparation(scene: PracticeScene, routeMap: Map<string, TimedSeg
           scene.rules.horizontalSeparationMeters,
           scene.rules.verticalSeparationMeters
         )
-        if (closest.horizontal >= scene.rules.horizontalSeparationMeters || closest.vertical >= scene.rules.verticalSeparationMeters) continue
-        const position = interpolate(leftStart, leftEnd, closest.ratio)
+        if (closest.ratioStart > closest.ratioEnd) continue
+        const ratio = Math.max(closest.ratioStart, Math.min(closest.ratioEnd, closest.ratio))
+        const left = interpolate(leftStart, leftEnd, ratio)
+        const right = interpolate(rightStart, rightEnd, ratio)
+        const horizontal = Math.hypot(left.east - right.east, left.north - right.north)
+        const vertical = Math.abs(left.up - right.up)
+        if (horizontal >= scene.rules.horizontalSeparationMeters || vertical >= scene.rules.verticalSeparationMeters) continue
+        const position = left
         findings.push({
           code: "AIR_CONFLICT",
           droneIds: [leftId, rightId],
           objectIds: [leftId, rightId],
-          timeSeconds: startTime + (endTime - startTime) * closest.ratio,
+          timeSeconds: startTime + (endTime - startTime) * ratio,
           durationSeconds: (endTime - startTime) * Math.max(0, closest.ratioEnd - closest.ratioStart),
           position: toGeo(scene.origin, position),
-          measuredValue: closest.horizontal,
+          measuredValue: horizontal,
           thresholdValue: scene.rules.horizontalSeparationMeters,
-          message: `${leftId} 与 ${rightId} 的空中间隔 ${closest.horizontal.toFixed(1)} m，小于 ${scene.rules.horizontalSeparationMeters.toFixed(1)} m`
+          message: `${leftId} 与 ${rightId} 的空中间隔 ${horizontal.toFixed(1)} m，小于 ${scene.rules.horizontalSeparationMeters.toFixed(1)} m`
         })
       }
     }
@@ -205,6 +235,10 @@ function positionAt(segments: TimedSegment[], time: number): LocalPoint | null {
     }
   }
   return segments.at(-1)!.end
+}
+
+function activeAt(segments: TimedSegment[], time: number): boolean {
+  return segments.some((segment) => time >= segment.startTime && time <= segment.endTime)
 }
 
 function closestSynchronous(

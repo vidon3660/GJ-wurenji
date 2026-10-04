@@ -10,7 +10,7 @@ import type {
   SimulationResult
 } from "@wurenji/shared"
 import { validatePlan, validateScene } from "@wurenji/shared"
-import { distance3d, horizontalDistance, interpolate, minimumDistanceDuringInterval, pointInPolygon, segmentIntersectsBox, segmentIntersectsPolygon, toGeo, toLocal } from "./geo.js"
+import { distance3d, horizontalDistance, interpolate, pointInPolygon, segmentIntersectsBox, segmentIntersectsPolygon, toGeo, toLocal } from "./geo.js"
 
 interface CompiledRoute {
   drone: DronePlan
@@ -69,7 +69,9 @@ function compileRoute(input: SimulationInput, drone: DronePlan): CompiledRoute {
   const segmentSpeeds: number[] = []
   const energyStops = compileEnergyStops(input, drone, points)
   let totalLength = 0
-  let duration = drone.takeoffDelaySeconds
+  let duration = drone.takeoffDelaySeconds + energyStops
+    .filter((stop) => stop.valid && stop.waypointIndex === 0)
+    .reduce((sum, stop) => sum + stop.durationSeconds, 0)
   const weatherFactor = rainSpeedFactor(input.scene.environment.rainLevel)
   const headwindFactor = input.scene.environment.wind.enabled
     ? Math.max(0.65, 1 - input.scene.environment.wind.speedMps * 0.012)
@@ -152,6 +154,11 @@ function stateAt(input: SimulationInput, route: CompiledRoute, timeSeconds: numb
   let remainingTime = timeSeconds - route.drone.takeoffDelaySeconds
   let travelledDistance = 0
 
+  for (const stop of route.energyStops.filter((item) => item.valid && item.waypointIndex === 0)) {
+    if (remainingTime <= stop.durationSeconds) return { point: route.points[0]!, speed: 0, distance: 0, status: "WAITING", segmentIndex: -1 }
+    remainingTime -= stop.durationSeconds
+  }
+
   for (let index = 0; index < route.segmentLengths.length; index += 1) {
     const length = route.segmentLengths[index]!
     const speed = route.segmentSpeeds[index]!
@@ -216,6 +223,15 @@ function segmentEnergy(input: SimulationInput, route: CompiledRoute, segmentInde
   return route.segmentLengths[segmentIndex]! * route.energyPerMeter * energyFactor(input) * payloadFactor
 }
 
+function hoverEnergyPerSecond(input: SimulationInput, route: CompiledRoute): number {
+  if (route.energyPerMeter === null) return 0
+  const payloadFactor = 1 + Math.max(0, payloadForRoute(input, route)) * 0.02
+  // A stationary aircraft still draws a fraction of cruise propulsion power;
+  // this fallback keeps legacy scenes deterministic while accounting for air
+  // holds when no separate hover-power parameter is supplied.
+  return route.energyPerMeter * Math.max(1, input.scene.aircraft.cruiseSpeedMps) * 0.25 * energyFactor(input) * payloadFactor
+}
+
 function energyAt(input: SimulationInput, route: CompiledRoute, timeSeconds: number): { remainingEnergyWh: number | null; consumedEnergyWh: number } {
   const capacity = effectiveBatteryCapacity(input)
   if (capacity === null) return { remainingEnergyWh: null, consumedEnergyWh: 0 }
@@ -223,6 +239,15 @@ function energyAt(input: SimulationInput, route: CompiledRoute, timeSeconds: num
   let consumed = 0
   if (timeSeconds <= route.drone.takeoffDelaySeconds) return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
   let remainingTime = timeSeconds - route.drone.takeoffDelaySeconds
+  for (const stop of route.energyStops.filter((item) => item.valid && item.waypointIndex === 0)) {
+    if (remainingTime <= stop.durationSeconds) {
+      const ratio = stop.durationSeconds <= 0 ? 1 : Math.max(0, Math.min(1, remainingTime / stop.durationSeconds))
+      remaining = Math.min(capacity, remaining + stop.energyWh * ratio)
+      return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+    }
+    remainingTime -= stop.durationSeconds
+    remaining = Math.min(capacity, remaining + stop.energyWh)
+  }
   for (let index = 0; index < route.segmentLengths.length; index += 1) {
     const segmentDuration = route.segmentLengths[index]! / route.segmentSpeeds[index]!
     const energy = segmentEnergy(input, route, index)
@@ -236,7 +261,15 @@ function energyAt(input: SimulationInput, route: CompiledRoute, timeSeconds: num
     consumed += energy
     remaining = Math.max(0, remaining - energy)
     const waitSeconds = route.drone.waypoints[index + 1]?.waitSeconds ?? 0
-    if (remainingTime <= waitSeconds) return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+    const hoverEnergy = hoverEnergyPerSecond(input, route) * Math.max(0, waitSeconds)
+    if (remainingTime <= waitSeconds) {
+      const ratio = waitSeconds <= 0 ? 1 : Math.max(0, Math.min(1, remainingTime / waitSeconds))
+      consumed += hoverEnergy * ratio
+      remaining = Math.max(0, remaining - hoverEnergy * ratio)
+      return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+    }
+    consumed += hoverEnergy
+    remaining = Math.max(0, remaining - hoverEnergy)
     remainingTime -= waitSeconds
     for (const stop of route.energyStops.filter((item) => item.valid && item.waypointIndex === index + 1)) {
       if (remainingTime <= stop.durationSeconds) {
@@ -302,6 +335,93 @@ function geoAverage(left: GeoPoint, right: GeoPoint): GeoPoint {
   }
 }
 
+function rotateObstaclePoint(point: LocalPoint, center: LocalPoint, headingDegrees = 0): LocalPoint {
+  const heading = headingDegrees * Math.PI / 180
+  const east = point.east - center.east
+  const north = point.north - center.north
+  return {
+    east: east * Math.cos(heading) + north * Math.sin(heading),
+    north: -east * Math.sin(heading) + north * Math.cos(heading),
+    up: point.up - center.up
+  }
+}
+
+function segmentsIntersect2d(a: LocalPoint, b: LocalPoint, c: LocalPoint, d: LocalPoint): boolean {
+  const cross = (p: LocalPoint, q: LocalPoint, r: LocalPoint) => (q.east - p.east) * (r.north - p.north) - (q.north - p.north) * (r.east - p.east)
+  const on = (p: LocalPoint, q: LocalPoint, r: LocalPoint) => q.east >= Math.min(p.east, r.east) - 1e-9 && q.east <= Math.max(p.east, r.east) + 1e-9 && q.north >= Math.min(p.north, r.north) - 1e-9 && q.north <= Math.max(p.north, r.north) + 1e-9
+  const abC = cross(a, b, c); const abD = cross(a, b, d); const cdA = cross(c, d, a); const cdB = cross(c, d, b)
+  return ((abC > 0 && abD < 0) || (abC < 0 && abD > 0)) && ((cdA > 0 && cdB < 0) || (cdA < 0 && cdB > 0))
+    || Math.abs(abC) < 1e-9 && on(a, c, b) || Math.abs(abD) < 1e-9 && on(a, d, b)
+    || Math.abs(cdA) < 1e-9 && on(c, a, d) || Math.abs(cdB) < 1e-9 && on(c, b, d)
+}
+
+function segmentLeavesPolygon(start: LocalPoint, end: LocalPoint, polygon: LocalPoint[]): boolean {
+  const startInside = pointInPolygon(start, polygon)
+  const endInside = pointInPolygon(end, polygon)
+  if (!startInside || !endInside) return true
+  for (let index = 0; index < polygon.length; index += 1) {
+    if (segmentsIntersect2d(start, end, polygon[index]!, polygon[(index + 1) % polygon.length]!)) return true
+  }
+  return false
+}
+
+function separationConflictDuringInterval(
+  leftStart: LocalPoint,
+  leftEnd: LocalPoint,
+  rightStart: LocalPoint,
+  rightEnd: LocalPoint,
+  horizontalLimit: number,
+  verticalLimit: number
+): { horizontal: number; vertical: number; ratio: number } | null {
+  const x0 = leftStart.east - rightStart.east
+  const y0 = leftStart.north - rightStart.north
+  const vx = (leftEnd.east - leftStart.east) - (rightEnd.east - rightStart.east)
+  const vy = (leftEnd.north - leftStart.north) - (rightEnd.north - rightStart.north)
+  const a = vx * vx + vy * vy
+  const b = 2 * (x0 * vx + y0 * vy)
+  const c = x0 * x0 + y0 * y0 - horizontalLimit * horizontalLimit
+  let horizontalStart = 0
+  let horizontalEnd = 1
+  if (a < Number.EPSILON) {
+    if (c > 0) return null
+  } else {
+    const discriminant = b * b - 4 * a * c
+    if (discriminant < 0) {
+      if (c > 0) return null
+    } else {
+      const rawStart = (-b - Math.sqrt(discriminant)) / (2 * a)
+      const rawEnd = (-b + Math.sqrt(discriminant)) / (2 * a)
+      if (rawEnd < 0 || rawStart > 1) return null
+      horizontalStart = Math.max(0, rawStart)
+      horizontalEnd = Math.min(1, rawEnd)
+      if (horizontalStart > horizontalEnd) return null
+    }
+  }
+  const z0 = leftStart.up - rightStart.up
+  const vz = (leftEnd.up - leftStart.up) - (rightEnd.up - rightStart.up)
+  let verticalStart = 0
+  let verticalEnd = 1
+  if (Math.abs(vz) < Number.EPSILON) {
+    if (Math.abs(z0) > verticalLimit) return null
+  } else {
+    const first = (-verticalLimit - z0) / vz
+    const second = (verticalLimit - z0) / vz
+    const rawStart = Math.min(first, second)
+    const rawEnd = Math.max(first, second)
+    if (rawEnd < 0 || rawStart > 1) return null
+    verticalStart = Math.max(0, rawStart)
+    verticalEnd = Math.min(1, rawEnd)
+    if (verticalStart > verticalEnd) return null
+  }
+  const start = Math.max(horizontalStart, verticalStart)
+  const end = Math.min(horizontalEnd, verticalEnd)
+  if (start > end) return null
+  const unconstrained = a < Number.EPSILON ? start : Math.max(start, Math.min(end, -b / (2 * a)))
+  const left = interpolate(leftStart, leftEnd, unconstrained)
+  const right = interpolate(rightStart, rightEnd, unconstrained)
+  return { horizontal: horizontalDistance(left, right), vertical: Math.abs(left.up - right.up), ratio: unconstrained }
+}
+
 export function runSimulation(input: SimulationInput): SimulationResult {
   const validationIssues = [...validateScene(input.scene), ...validatePlan(input.scene, input.plan)]
   if (validationIssues.some((issue) => issue.severity === "ERROR")) {
@@ -348,7 +468,7 @@ export function runSimulation(input: SimulationInput): SimulationResult {
           batteryPercent: batteryCapacity === null || batteryCapacity <= 0 ? 0 : energy.remainingEnergyWh / batteryCapacity * 100
         })
       })
-      if (energy.remainingEnergyWh !== null && energy.remainingEnergyWh < reserve && state.status !== "WAITING") {
+      if (energy.remainingEnergyWh !== null && (energy.remainingEnergyWh <= 0 || energy.remainingEnergyWh < reserve) && (state.status !== "WAITING" || state.segmentIndex >= 0)) {
         addOrExtendFinding(activeFindings, completedFindings, {
           ruleCode: "ENERGY_INSUFFICIENT", severity: "ERROR", title: "剩余能量低于返航余度",
           message: `${route.drone.droneId} 在 ${timeSeconds.toFixed(1)} s 时剩余能量 ${energy.remainingEnergyWh.toFixed(1)} Wh，低于返航余度 ${reserve.toFixed(1)} Wh`,
@@ -363,7 +483,10 @@ export function runSimulation(input: SimulationInput): SimulationResult {
     for (const item of states) {
       const droneId = item.route.drone.droneId
       const previous = previousStates.get(droneId)
-      if (!pointInPolygon(item.state.point, boundary)) {
+      const boundaryExit = previous
+        ? segmentLeavesPolygon(previous.point, item.state.point, boundary)
+        : !pointInPolygon(item.state.point, boundary)
+      if (boundaryExit) {
         addOrExtendFinding(activeFindings, completedFindings, {
           ruleCode: "OUT_OF_BOUNDS", severity: "ERROR", title: "无人机超出作业边界",
           message: `${droneId} 已离开教师配置的作业区域`, startTimeSeconds: timeSeconds,
@@ -386,9 +509,9 @@ export function runSimulation(input: SimulationInput): SimulationResult {
         }
       }
       for (const obstacle of obstacles) {
-        const insideHorizontal = Math.abs(item.state.point.east - obstacle.local.east) <= obstacle.widthMeters / 2
-          && Math.abs(item.state.point.north - obstacle.local.north) <= obstacle.lengthMeters / 2
-        if (insideHorizontal && item.state.point.up >= 0 && item.state.point.up <= obstacle.heightMeters) {
+        const obstacleCurrent = rotateObstaclePoint(item.state.point, obstacle.local, obstacle.headingDegrees)
+        const insideObstacle = segmentIntersectsBox(obstacleCurrent, obstacleCurrent, { east: 0, north: 0, up: 0 }, obstacle.widthMeters, obstacle.lengthMeters, obstacle.heightMeters)
+        if (insideObstacle) {
           addOrExtendFinding(activeFindings, completedFindings, {
             ruleCode: "OBSTACLE", severity: "ERROR", title: "航迹穿越障碍物",
             message: `${droneId} 与 ${obstacle.name} 的简化碰撞体相交`, startTimeSeconds: timeSeconds,
@@ -398,9 +521,9 @@ export function runSimulation(input: SimulationInput): SimulationResult {
           }, tick, stepSeconds)
         }
         if (previous && segmentIntersectsBox(
-          previous.point,
-          item.state.point,
-          obstacle.local,
+          rotateObstaclePoint(previous.point, obstacle.local, obstacle.headingDegrees),
+          obstacleCurrent,
+          { east: 0, north: 0, up: 0 },
           obstacle.widthMeters,
           obstacle.lengthMeters,
           obstacle.heightMeters
@@ -441,12 +564,25 @@ export function runSimulation(input: SimulationInput): SimulationResult {
         const leftPrevious = previousStates.get(left.route.drone.droneId)
         const rightPrevious = previousStates.get(right.route.drone.droneId)
         const interval = leftPrevious && rightPrevious
-          ? minimumDistanceDuringInterval(leftPrevious.point, left.state.point, rightPrevious.point, right.state.point)
-          : { horizontal: horizontalDistance(left.state.point, right.state.point), vertical: Math.abs(left.state.point.up - right.state.point.up), ratio: 1 }
+          ? separationConflictDuringInterval(
+            leftPrevious.point,
+            left.state.point,
+            rightPrevious.point,
+            right.state.point,
+            input.scene.rules.horizontalSeparationMeters,
+            input.scene.rules.verticalSeparationMeters
+          )
+          : (() => {
+            const horizontal = horizontalDistance(left.state.point, right.state.point)
+            const vertical = Math.abs(left.state.point.up - right.state.point.up)
+            return horizontal < input.scene.rules.horizontalSeparationMeters && vertical < input.scene.rules.verticalSeparationMeters
+              ? { horizontal, vertical, ratio: 1 }
+              : null
+          })()
+        if (!interval) continue
         const horizontal = interval.horizontal
         const vertical = interval.vertical
-        if (horizontal < input.scene.rules.horizontalSeparationMeters && vertical < input.scene.rules.verticalSeparationMeters) {
-          addOrExtendFinding(activeFindings, completedFindings, {
+        addOrExtendFinding(activeFindings, completedFindings, {
             ruleCode: "SEPARATION", severity: "ERROR", title: "两机安全间距不足",
             message: `${left.route.drone.droneId} 与 ${right.route.drone.droneId} 最近水平间距 ${horizontal.toFixed(1)} m`,
             startTimeSeconds: leftPrevious && rightPrevious
@@ -457,7 +593,6 @@ export function runSimulation(input: SimulationInput): SimulationResult {
             thresholdValue: input.scene.rules.horizontalSeparationMeters,
             suggestion: "调整起飞时间、高度层或交叉航段"
           }, tick, stepSeconds)
-        }
       }
     }
 
@@ -467,6 +602,29 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   }
 
   completedFindings.push(...[...activeFindings.values()].map((item) => item.finding))
+
+  const terrainRequired = (input.scene.rules.minimumTerrainClearanceMeters ?? 0) > 0
+  if (terrainRequired && routes.some((route) => !route.terrainHeights.some((value) => value !== undefined))) {
+    completedFindings.push({
+      id: findingId("GROUND_CLEARANCE", [input.scene.id, "MISSING_TERRAIN"]),
+      ruleCode: "GROUND_CLEARANCE", severity: "ERROR", title: "地面净空数据缺失",
+      message: "已配置地面净空阈值，但至少一条航线缺少完整地面高程，不能判定方案可执行",
+      startTimeSeconds: 0, endTimeSeconds: durationSeconds, objectIds: [input.scene.id], position: null,
+      measuredValue: null, thresholdValue: input.scene.rules.minimumTerrainClearanceMeters ?? null,
+      suggestion: "加载覆盖全部航段的地形高程数据后重新仿真"
+    })
+  }
+
+  // A route that reaches zero usable energy cannot be marked as landed even if
+  // the geometric path has a final waypoint. The remaining-energy result is
+  // authoritative for execution feasibility.
+  for (const route of routes) {
+    const finalEnergy = energyAt(input, route, durationSeconds).remainingEnergyWh
+    if (finalEnergy !== null && finalEnergy <= 0) {
+      const track = tracks.get(route.drone.droneId)
+      if (track) track.completedAtSeconds = null
+    }
+  }
 
   for (const route of routes) {
     for (const stop of route.energyStops.filter((item) => !item.valid)) {

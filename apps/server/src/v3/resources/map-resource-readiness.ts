@@ -111,7 +111,7 @@ function diagnoseEnvironment(layers: V3RegionLayerDefinition[] | undefined): V3E
     version: layer.version,
     message: complete
       ? `环境图层已包含 ${buildings.length} 个建筑物和 ${obstacles.length} 个障碍物，可用于正式资源进一步验收`
-      : "建筑物/障碍物可用于教学表达，但尚未达到正式权威资源验收"
+      : "建筑物/障碍物可用于教学表达，但尚未达到正式资源验收"
   }
 }
 
@@ -200,9 +200,9 @@ async function checkElevationSnapshot(
   mapRoot: string
 ): Promise<V3MapResourceReadinessCheck> {
   const kind: V3MapResourceKind = "ELEVATION_SNAPSHOT"
-  if (!terrain?.elevationSampleUrl) return missing(kind, "区域包未配置权威高程采样快照")
+  if (!terrain?.elevationSampleUrl) return missing(kind, "区域包未配置高程采样快照")
   const localPath = localMapPath(terrain.elevationSampleUrl, mapRoot)
-  if (!localPath) return external(kind, terrain.elevationSampleUrl, "高程采样快照为外部地址，不能作为本地正式证据")
+  if (!localPath) return external(kind, terrain.elevationSampleUrl, "高程采样快照为外部地址，不能作为本地数据")
   if (!(await isInsideAsync(localPath, regionRoot))) return invalid(kind, terrain.elevationSampleUrl, localPath, terrain.elevationSampleSha256 ?? null, "高程快照必须位于当前区域目录内")
   try {
     const content = await readFile(localPath, "utf8")

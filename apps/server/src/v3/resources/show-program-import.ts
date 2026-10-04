@@ -93,6 +93,7 @@ export function parseShowProgramCsv(content: Buffer, sourceSoftware: string): Pa
   const sourceTimes = [...new Set(allPoints.map((point) => point.sourceTimeMs))].sort((left, right) => left - right)
   const sampledTimes = sampleTimeline(sourceTimes, maximumTrackPoints)
   const groupTracks = buildGroupTracks(aircraftIds, tracks, sampledTimes, minimumSourceTimeMs)
+  const separationCheck = validateMultiAircraftSeparation(tracks, sourceTimes, minimumSourceTimeMs)
   const checks: V3ResourceValidationCheck[] = [
     { code: "SHOW_PROGRAM_CSV", passed: true, message: "CSV 表头、UTF-8 编码和数值字段校验通过" },
     { code: "SHOW_PROGRAM_SCALE", passed: true, message: `识别 ${aircraftIds.length} 架无人机，与固定规模模板兼容` },
@@ -102,9 +103,10 @@ export function parseShowProgramCsv(content: Buffer, sourceSoftware: string): Pa
       code: "SHOW_PROGRAM_KINEMATICS",
       passed: true,
       message: maximumSpeedMetersPerSecond > 20
-        ? `最大段速度 ${round(maximumSpeedMetersPerSecond)} m/s，已通过硬限制但建议人工复核机型能力`
+        ? `最大段速度 ${round(maximumSpeedMetersPerSecond)} m/s，已通过硬限制，但仍需核对机型性能参数`
         : `最大段速度 ${round(maximumSpeedMetersPerSecond)} m/s，运动学初检通过`
-    }
+    },
+    separationCheck
   ]
   return {
     manifest: {
@@ -123,6 +125,128 @@ export function parseShowProgramCsv(content: Buffer, sourceSoftware: string): Pa
     },
     checks
   }
+}
+
+/**
+ * Check the imported individual aircraft tracks before they are reduced to
+ * group averages. A spatial hash keeps the check bounded for the 3,000-aircraft
+ * template; a broad phase narrows candidate pairs before exact segment checks.
+ */
+function validateMultiAircraftSeparation(
+  tracks: Map<string, SourcePoint[]>,
+  sourceTimes: number[],
+  minimumSourceTimeMs: number
+): V3ResourceValidationCheck {
+  const horizontalLimit = 5
+  const verticalLimit = 3
+  const collisionPairs = new Set<string>()
+  let minimumHorizontal = Number.POSITIVE_INFINITY
+  let firstCollisionTime: number | null = null
+  for (let intervalIndex = 0; intervalIndex < sourceTimes.length - 1; intervalIndex += 1) {
+    const intervalStart = sourceTimes[intervalIndex]!
+    const intervalEnd = sourceTimes[intervalIndex + 1]!
+    const candidates = new Set<string>()
+    // Broad phase: identify pairs that approach one another at any of eight
+    // points in the interval. The exact relative-motion check below then
+    // calculates the closest point on the full linear segments.
+    for (let subdivision = 0; subdivision <= 8; subdivision += 1) {
+      const sourceTimeMs = intervalStart + (intervalEnd - intervalStart) * subdivision / 8
+      const buckets = new Map<string, Array<{ id: string; point: SourcePoint }>>()
+      for (const [id, points] of tracks) {
+        const point = interpolate(points, sourceTimeMs)
+        const eastCell = Math.floor(point.eastMeters / horizontalLimit)
+        const northCell = Math.floor(point.northMeters / horizontalLimit)
+        for (let eastOffset = -1; eastOffset <= 1; eastOffset += 1) {
+          for (let northOffset = -1; northOffset <= 1; northOffset += 1) {
+            const key = `${eastCell + eastOffset}:${northCell + northOffset}`
+            for (const candidate of buckets.get(key) ?? []) candidates.add([id, candidate.id].sort().join("/"))
+          }
+        }
+        const ownKey = `${eastCell}:${northCell}`
+        const own = buckets.get(ownKey) ?? []
+        own.push({ id, point })
+        buckets.set(ownKey, own)
+      }
+    }
+    for (const pair of candidates) {
+      const [leftId, rightId] = pair.split("/")
+      const left = tracks.get(leftId!)
+      const right = tracks.get(rightId!)
+      if (!left || !right) continue
+      const leftStart = interpolate(left, intervalStart)
+      const leftEnd = interpolate(left, intervalEnd)
+      const rightStart = interpolate(right, intervalStart)
+      const rightEnd = interpolate(right, intervalEnd)
+      const closest = closestSynchronousDistance(leftStart, leftEnd, rightStart, rightEnd, horizontalLimit, verticalLimit)
+      minimumHorizontal = Math.min(minimumHorizontal, closest.horizontal)
+      if (closest.conflict) {
+        collisionPairs.add(pair)
+        firstCollisionTime ??= intervalStart - minimumSourceTimeMs + (intervalEnd - intervalStart) * closest.ratio
+      }
+    }
+  }
+  if (collisionPairs.size > 0) {
+    return {
+      code: "SHOW_PROGRAM_AIR_CONFLICT",
+      passed: false,
+      message: `检测到 ${collisionPairs.size} 组机间距不足（最小水平间距 ${round(minimumHorizontal)} m，约发生于 ${round((firstCollisionTime ?? 0) / 1000)} s；要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
+    }
+  }
+  return {
+    code: "SHOW_PROGRAM_AIR_CONFLICT",
+    passed: true,
+    message: `逐机轨迹间距检查通过（最小水平间距 ${Number.isFinite(minimumHorizontal) ? `${round(minimumHorizontal)} m` : "无可比较轨迹"}；要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
+  }
+}
+
+function closestSynchronousDistance(
+  leftStart: SourcePoint,
+  leftEnd: SourcePoint,
+  rightStart: SourcePoint,
+  rightEnd: SourcePoint,
+  horizontalLimit: number,
+  verticalLimit: number
+): { horizontal: number; vertical: number; ratio: number; conflict: boolean } {
+  const relativeStartEast = leftStart.eastMeters - rightStart.eastMeters
+  const relativeStartNorth = leftStart.northMeters - rightStart.northMeters
+  const relativeVelocityEast = (leftEnd.eastMeters - leftStart.eastMeters) - (rightEnd.eastMeters - rightStart.eastMeters)
+  const relativeVelocityNorth = (leftEnd.northMeters - leftStart.northMeters) - (rightEnd.northMeters - rightStart.northMeters)
+  const denominator = relativeVelocityEast ** 2 + relativeVelocityNorth ** 2
+  const closestRatio = denominator < Number.EPSILON
+    ? 0
+    : Math.max(0, Math.min(1, -(relativeStartEast * relativeVelocityEast + relativeStartNorth * relativeVelocityNorth) / denominator))
+  const horizontalInterval = quadraticInterval(relativeStartEast, relativeStartNorth, relativeVelocityEast, relativeVelocityNorth, horizontalLimit)
+  const verticalInterval = linearAbsoluteInterval(leftStart.upMeters - rightStart.upMeters, (leftEnd.upMeters - leftStart.upMeters) - (rightEnd.upMeters - rightStart.upMeters), verticalLimit)
+  const conflictStart = Math.max(horizontalInterval[0], verticalInterval[0])
+  const conflictEnd = Math.min(horizontalInterval[1], verticalInterval[1])
+  const ratio = conflictStart <= conflictEnd
+    ? Math.max(conflictStart, Math.min(conflictEnd, closestRatio))
+    : closestRatio
+  const leftEast = leftStart.eastMeters + (leftEnd.eastMeters - leftStart.eastMeters) * ratio
+  const leftNorth = leftStart.northMeters + (leftEnd.northMeters - leftStart.northMeters) * ratio
+  const leftUp = leftStart.upMeters + (leftEnd.upMeters - leftStart.upMeters) * ratio
+  const rightEast = rightStart.eastMeters + (rightEnd.eastMeters - rightStart.eastMeters) * ratio
+  const rightNorth = rightStart.northMeters + (rightEnd.northMeters - rightStart.northMeters) * ratio
+  const rightUp = rightStart.upMeters + (rightEnd.upMeters - rightStart.upMeters) * ratio
+  return { horizontal: Math.hypot(leftEast - rightEast, leftNorth - rightNorth), vertical: Math.abs(leftUp - rightUp), ratio, conflict: conflictStart <= conflictEnd }
+}
+
+function quadraticInterval(x0: number, y0: number, vx: number, vy: number, limit: number): [number, number] {
+  const a = vx * vx + vy * vy
+  const b = 2 * (x0 * vx + y0 * vy)
+  const c = x0 * x0 + y0 * y0 - limit * limit
+  if (a < Number.EPSILON) return c <= 0 ? [0, 1] : [1, 0]
+  const discriminant = b * b - 4 * a * c
+  if (discriminant < 0) return c <= 0 ? [0, 1] : [1, 0]
+  const root = Math.sqrt(discriminant)
+  return [Math.max(0, Math.min(1, (-b - root) / (2 * a))), Math.min(1, Math.max(0, (-b + root) / (2 * a)))]
+}
+
+function linearAbsoluteInterval(start: number, velocity: number, limit: number): [number, number] {
+  if (Math.abs(velocity) < Number.EPSILON) return Math.abs(start) <= limit ? [0, 1] : [1, 0]
+  const first = (-limit - start) / velocity
+  const second = (limit - start) / velocity
+  return [Math.max(0, Math.min(1, Math.min(first, second))), Math.min(1, Math.max(0, Math.max(first, second)))]
 }
 
 export function isShowProgramManifest(value: unknown): value is ShowProgramManifest {

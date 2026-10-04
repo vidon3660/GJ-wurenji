@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import type { AuthUser, QuestionDefinition } from "@wurenji/shared"
 import type { DataSource, EntityManager, Repository } from "typeorm"
-import { ProjectEvaluationEntity } from "../v3/runtime/runtime.entities.js"
+import { ProjectEvaluationEntity, RuntimeSessionEntity } from "../v3/runtime/runtime.entities.js"
 import { AssignmentSnapshotEntity, StudentProjectEntity } from "../v3/assignments/assignment.entities.js"
 import { QuestionAttemptEntity, QuestionBankEntity, QuestionBankVersionEntity, QuestionResponseEntity } from "./question-bank.entities.js"
 import { QuestionBankService } from "./question-bank.service.js"
@@ -32,6 +32,7 @@ function buildService(options: {
   attempt: QuestionAttemptEntity
   responses: QuestionResponseEntity[]
   evaluation: ProjectEvaluationEntity
+  runtimeSession?: RuntimeSessionEntity | null
 }) {
   const manager = {
     findOne: vi.fn().mockImplementation((entity: unknown) => {
@@ -39,6 +40,7 @@ function buildService(options: {
       if (entity === QuestionBankVersionEntity) return options.version
       if (entity === QuestionAttemptEntity) return options.attempt
       if (entity === ProjectEvaluationEntity) return options.evaluation
+      if (entity === RuntimeSessionEntity) return options.runtimeSession ?? null
       return null
     }),
     findOneByOrFail: vi.fn().mockResolvedValue(teacher),
@@ -114,6 +116,48 @@ function fixture() {
 }
 
 describe("QuestionBankService regrade", () => {
+  it("does not grade metrics from an earlier run while the latest session is not finished", async () => {
+    const value = fixture()
+    const { service } = buildService({
+      ...value,
+      runtimeSession: {
+        id: "session-new",
+        projectId: value.project.id,
+        status: "READY",
+        attemptNo: 2,
+        createdAt: new Date("2026-09-09T02:00:00Z")
+      } as RuntimeSessionEntity
+    })
+
+    const result = await service.regradeQuestionnaire(value.project.id, teacher, { expectedRevision: 2 })
+
+    expect(value.attempt.status).toBe("SUBMITTED")
+    expect(value.attempt.autoScore).toBe(10)
+    expect(value.responses[1]).toMatchObject({ autoScore: null, judgment: "PENDING" })
+    expect(result.canRegrade).toBe(true)
+  })
+
+  it("does not reuse metrics written before the latest completed session", async () => {
+    const value = fixture()
+    value.evaluation.updatedAt = new Date("2026-09-09T01:30:00Z")
+    const { service } = buildService({
+      ...value,
+      runtimeSession: {
+        id: "session-new-completed",
+        projectId: value.project.id,
+        status: "COMPLETED",
+        attemptNo: 2,
+        createdAt: new Date("2026-09-09T02:00:00Z")
+      } as RuntimeSessionEntity
+    })
+
+    const result = await service.regradeQuestionnaire(value.project.id, teacher, { expectedRevision: 2 })
+
+    expect(value.attempt.status).toBe("SUBMITTED")
+    expect(value.responses[1]).toMatchObject({ autoScore: null, judgment: "PENDING" })
+    expect(result.canRegrade).toBe(true)
+  })
+
   it("refreshes pending evidence when a questionnaire is reopened after metrics arrive", async () => {
     const value = fixture()
     const { service, activities } = buildService(value)

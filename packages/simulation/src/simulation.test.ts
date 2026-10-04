@@ -286,6 +286,30 @@ describe("runSimulation", () => {
     expect(result.tracks[0]?.samples[0]?.batteryPercent).toBeCloseTo(100, 6)
   })
 
+  it("accounts for energy used during an airborne hold", () => {
+    const scene = createDemoScene()
+    scene.aircraft.count = 1
+    scene.noFlyZones = []
+    scene.obstacles = []
+    scene.aircraft.batteryCapacityWh = 100
+    scene.aircraft.energyConsumptionWhPerMeter = 0.1
+    scene.taskPoints = [{ id: "task-hold", name: "悬停任务", position: { ...scene.takeoffPoint, altitude: 60 }, payloadKg: 0, deadlineSeconds: 600, stage: 1 }]
+    const plan = createDemoPlan(scene)
+    plan.dronePlans[0]!.assignedTaskIds = ["task-hold"]
+    plan.dronePlans[0]!.waypoints = [
+      { id: "start", position: { ...scene.takeoffPoint, altitude: 0 }, speedMps: 10, waitSeconds: 0 },
+      { id: "hold", position: { ...scene.takeoffPoint, altitude: 60 }, speedMps: 10, waitSeconds: 10 },
+      { id: "land", position: { ...scene.landingPoint, altitude: 0 }, speedMps: 10, waitSeconds: 0 }
+    ]
+    const planWithoutHold = structuredClone(plan)
+    planWithoutHold.dronePlans[0]!.waypoints[1]!.waitSeconds = 0
+
+    const withHold = runSimulation({ scene, plan, stepSeconds: 1, seed: 35 })
+    const withoutHold = runSimulation({ scene, plan: planWithoutHold, stepSeconds: 1, seed: 35 })
+
+    expect(withHold.summary.totalEnergyConsumedWh).toBeGreaterThan(withoutHold.summary.totalEnergyConsumedWh)
+  })
+
   it("reports insufficient terrain clearance from waypoint ground heights", () => {
     const scene = createDemoScene()
     scene.aircraft.count = 1
@@ -306,6 +330,97 @@ describe("runSimulation", () => {
       expect.objectContaining({ ruleCode: "GROUND_CLEARANCE", objectIds: expect.arrayContaining(["U-01"]) })
     ]))
     expect(result.summary.groundRiskCount).toBeGreaterThan(0)
+  })
+
+  it("does not mark a terrain-constrained route executable without elevation data", () => {
+    const scene = createDemoScene()
+    scene.aircraft.count = 1
+    scene.obstacles = []
+    scene.noFlyZones = []
+    scene.rules.minimumTerrainClearanceMeters = 20
+    const plan = createDemoPlan(scene)
+    const result = runSimulation({ scene, plan, stepSeconds: 1, seed: 30 })
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ruleCode: "GROUND_CLEARANCE", measuredValue: null })
+    ]))
+    expect(result.summary.executable).toBe(false)
+  })
+
+  it("detects a route that leaves and re-enters a concave boundary between samples", () => {
+    const scene = createDemoScene()
+    scene.aircraft.count = 1
+    scene.obstacles = []
+    scene.noFlyZones = []
+    const toGeo = (east: number, north: number, altitude = 0) => ({
+      longitude: scene.origin.longitude + east / (6_378_137 * Math.cos(scene.origin.latitude * Math.PI / 180)) * 180 / Math.PI,
+      latitude: scene.origin.latitude + north / 6_378_137 * 180 / Math.PI,
+      altitude
+    })
+    scene.boundary = {
+      id: "concave-boundary",
+      name: "凹形边界",
+      positions: [toGeo(0, 0), toGeo(80, 0), toGeo(80, 80), toGeo(60, 80), toGeo(60, 20), toGeo(20, 20), toGeo(20, 80), toGeo(0, 80)]
+    }
+    const insideLeft = toGeo(10, 50, 60)
+    const insideRight = toGeo(70, 50, 60)
+    scene.takeoffPoint = insideLeft
+    scene.landingPoint = insideLeft
+    scene.taskPoints = [{ id: "task-boundary", name: "边界任务", position: insideLeft, payloadKg: 0, deadlineSeconds: 600, stage: 1 }]
+    const plan = createDemoPlan(scene)
+    plan.dronePlans[0]!.assignedTaskIds = ["task-boundary"]
+    plan.dronePlans[0]!.waypoints = [
+      { id: "start", position: insideLeft, speedMps: 20, waitSeconds: 0 },
+      { id: "cross", position: insideRight, speedMps: 20, waitSeconds: 0 },
+      { id: "land", position: insideLeft, speedMps: 20, waitSeconds: 0 }
+    ]
+
+    const result = runSimulation({ scene, plan, stepSeconds: 100, seed: 31 })
+
+    expect(result.findings.some((finding) => finding.ruleCode === "OUT_OF_BOUNDS")).toBe(true)
+  })
+
+  it("does not mark a geometrically complete route landed after its usable energy is exhausted", () => {
+    const scene = createDemoScene()
+    scene.aircraft.count = 1
+    scene.obstacles = []
+    scene.noFlyZones = []
+    scene.aircraft.batteryCapacityWh = 10
+    scene.aircraft.energyConsumptionWhPerMeter = 1
+    scene.taskPoints = [{ id: "task-energy", name: "能源任务", position: { ...scene.takeoffPoint, altitude: 60 }, payloadKg: 0, deadlineSeconds: 600, stage: 1 }]
+    const plan = createDemoPlan(scene)
+    plan.dronePlans[0]!.assignedTaskIds = ["task-energy"]
+    plan.dronePlans[0]!.waypoints = [
+      { id: "start", position: { ...scene.takeoffPoint, altitude: 0 }, speedMps: 20, waitSeconds: 0 },
+      { id: "far", position: { longitude: scene.takeoffPoint.longitude + 0.001, latitude: scene.takeoffPoint.latitude, altitude: 60 }, speedMps: 20, waitSeconds: 0 },
+      { id: "land", position: { ...scene.landingPoint, altitude: 0 }, speedMps: 20, waitSeconds: 0 }
+    ]
+
+    const result = runSimulation({ scene, plan, stepSeconds: 1, seed: 32 })
+
+    expect(result.findings.some((finding) => finding.ruleCode === "ENERGY_INSUFFICIENT")).toBe(true)
+    expect(result.summary.completedDroneCount).toBe(0)
+    expect(result.summary.executable).toBe(false)
+  })
+
+  it("uses a rotated obstacle footprint for generic simulation collision checks", () => {
+    const scene = createDemoScene()
+    scene.aircraft.count = 1
+    scene.obstacles = [{
+      id: "rotated-building", name: "旋转建筑", center: { ...scene.takeoffPoint, altitude: 0 }, widthMeters: 20, lengthMeters: 80, heightMeters: 100, headingDegrees: 45
+    }]
+    scene.noFlyZones = []
+    scene.taskPoints = [{ id: "task-rotated", name: "旋转建筑测试", position: { ...scene.takeoffPoint, altitude: 70 }, payloadKg: 0, deadlineSeconds: 600, stage: 1 }]
+    const plan = createDemoPlan(scene)
+    plan.dronePlans[0]!.assignedTaskIds = ["task-rotated"]
+    plan.dronePlans[0]!.waypoints = [
+      { id: "start", position: { longitude: scene.takeoffPoint.longitude - 0.0004, latitude: scene.takeoffPoint.latitude, altitude: 70 }, speedMps: 20, waitSeconds: 0 },
+      { id: "end", position: { longitude: scene.takeoffPoint.longitude + 0.0004, latitude: scene.takeoffPoint.latitude, altitude: 70 }, speedMps: 20, waitSeconds: 0 }
+    ]
+
+    const result = runSimulation({ scene, plan, stepSeconds: 1, seed: 33 })
+
+    expect(result.findings.some((finding) => finding.ruleCode === "OBSTACLE" && finding.objectIds.includes("rotated-building"))).toBe(true)
   })
 
   it("runs a 20-drone scenario within the MVP five-second target", () => {

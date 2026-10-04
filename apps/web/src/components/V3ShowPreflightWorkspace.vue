@@ -73,7 +73,7 @@ async function loadWorkspace() {
 }
 
 function confirmNormalItems() {
-  if (!canEdit.value) return
+  if (!canEdit.value || loading.value) return
   items.value = items.value.map((item) => item.sourceStatus === "NORMAL"
     ? { ...item, confirmed: true, resolution: "CONFIRMED", resolved: true }
     : item)
@@ -86,7 +86,7 @@ function updateResolution(item: ShowPreflightItemView, value: ShowPreflightResol
 }
 
 async function save(showMessage = true) {
-  if (!workspace.value || !canEdit.value) return
+  if (!workspace.value || !canEdit.value || loading.value) return
   loading.value = true
   try {
     const value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${props.project.id}/preflight`, {
@@ -110,7 +110,7 @@ async function save(showMessage = true) {
 }
 
 async function complete() {
-  if (!workspace.value) return
+  if (!workspace.value || loading.value || !decisionGate.value.canComplete) return
   await save(false)
   if (!workspace.value) return
   loading.value = true
@@ -138,7 +138,7 @@ function sourceLabel(status: ShowPreflightItemView["sourceStatus"]) {
     <header class="preflight-header">
       <div><span>PRE-FLIGHT CHECK</span><h2>飞前准备与起飞决策</h2><p>逐项确认设备、环境、区域与保障状态</p><p v-if="loadError" class="preflight-load-error" role="alert">检查数据加载失败：{{ loadError }}，请重新加载。</p></div>
       <dl><div><dt>已确认</dt><dd>{{ confirmedCount }}/{{ items.length }}</dd></div><div><dt>异常项</dt><dd>{{ issueCount }}</dd></div><div><dt>未处置</dt><dd>{{ unresolvedCount }}</dd></div></dl>
-      <el-button :icon="Refresh" circle :disabled="loading" :title="loadError ? '重新加载飞前检查' : '刷新飞前检查'" :aria-label="loadError ? '重新加载飞前检查' : '刷新飞前检查'" @click="loadWorkspace" />
+      <el-button :icon="Refresh" circle :loading="loading" :disabled="loading" :title="loadError ? '重新加载飞前检查' : '刷新飞前检查'" :aria-label="loadError ? '重新加载飞前检查' : '刷新飞前检查'" @click="loadWorkspace" />
     </header>
 
     <section v-if="loadError && !workspace" class="preflight-load-panel" role="alert">
@@ -152,15 +152,15 @@ function sourceLabel(status: ShowPreflightItemView["sourceStatus"]) {
       <section v-for="category in groupedItems" :key="category.code">
         <header><strong>{{ category.title }}</strong><span>{{ category.items.filter((item) => item.confirmed).length }}/{{ category.items.length }}</span></header>
         <div v-for="item in category.items" :key="item.code" class="preflight-row" :class="item.sourceStatus.toLowerCase()">
-          <el-checkbox v-model="item.confirmed" :disabled="!canEdit" />
+          <el-checkbox v-model="item.confirmed" :disabled="!canEdit || loading" />
           <div class="preflight-item-name"><strong>{{ item.title }}</strong><small>{{ item.detail }}</small></div>
           <span class="source-state"><el-icon v-if="item.sourceStatus !== 'NORMAL'"><Warning /></el-icon>{{ sourceLabel(item.sourceStatus) }}<small v-if="item.affectedCount">{{ item.affectedCount }}</small></span>
-          <el-select :model-value="item.resolution" :disabled="!canEdit" placeholder="处置" clearable @update:model-value="updateResolution(item, $event)">
+          <el-select :model-value="item.resolution" :disabled="!canEdit || loading" placeholder="处置" clearable @update:model-value="updateResolution(item, $event)">
             <el-option v-for="option in resolutionOptions" :key="option.value" :label="option.label" :value="option.value" />
           </el-select>
-          <el-checkbox v-if="item.sourceStatus !== 'NORMAL'" v-model="item.resolved" :disabled="!canEdit" label="已解决" />
+          <el-checkbox v-if="item.sourceStatus !== 'NORMAL'" v-model="item.resolved" :disabled="!canEdit || loading" label="已解决" />
           <span v-else class="normal-mark"><el-icon><Check /></el-icon></span>
-          <el-input v-model="item.note" :disabled="!canEdit" maxlength="500" placeholder="记录" />
+          <el-input v-model="item.note" :disabled="!canEdit || loading" maxlength="500" placeholder="记录" />
         </div>
       </section>
     </main>
@@ -176,7 +176,7 @@ function sourceLabel(status: ShowPreflightItemView["sourceStatus"]) {
       </el-radio-group>
       <label><span>判断依据</span><el-input v-model="rationale" :disabled="!canEdit || !decision" type="textarea" :rows="5" maxlength="2000" show-word-limit placeholder="简要说明检查结论、风险判断和决策原因" /></label>
       <div class="decision-summary"><span :class="{ complete: confirmedCount === items.length }">{{ confirmedCount === items.length ? '检查项已全部确认' : `尚有 ${items.length - confirmedCount} 项未确认` }}</span><span :class="{ complete: unresolvedCount === 0 }">{{ unresolvedCount === 0 ? '异常项已形成处置结果' : `${unresolvedCount} 项异常未处置` }}</span></div>
-      <footer v-if="canEdit"><el-button @click="confirmNormalItems">确认全部正常项</el-button><el-button @click="save()">保存</el-button><el-button type="primary" :icon="CircleCheck" :disabled="!decisionGate.canComplete" @click="complete">完成飞前准备</el-button></footer>
+      <footer v-if="canEdit"><el-button :disabled="loading" @click="confirmNormalItems">确认全部正常项</el-button><el-button :loading="loading" :disabled="loading" @click="save()">保存</el-button><el-button type="primary" :icon="CircleCheck" :loading="loading" :disabled="loading || !decisionGate.canComplete" @click="complete">完成飞前准备</el-button></footer>
       <div v-else class="preflight-readonly"><strong>{{ workspace?.status === 'COMPLETED' ? '飞前准备已完成' : '只读查看' }}</strong><span>{{ workspace?.completedAt ? formatPlatformDateTime(workspace.completedAt) : '等待学生提交' }}</span></div>
     </aside>
   </section>

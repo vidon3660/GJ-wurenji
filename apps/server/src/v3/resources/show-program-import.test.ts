@@ -39,13 +39,41 @@ describe("show program CSV import", () => {
 
     expect(() => parseShowProgramCsv(value, "Dance Studio X")).toThrow("存在重复轨迹点")
   })
+
+  it("rejects imported tracks that converge inside the air separation limits", () => {
+    const rows = ["aircraft_id,time_ms,east_m,north_m,up_m"]
+    for (let index = 0; index < 100; index += 1) {
+      const east = (index % 10) * 8
+      const north = Math.floor(index / 10) * 8
+      rows.push(`UAV-${String(index + 1).padStart(3, "0")},0,${east},${north},20`)
+      rows.push(`UAV-${String(index + 1).padStart(3, "0")},10000,0,0,20`)
+    }
+    const parsed = parseShowProgramCsv(Buffer.from(rows.join("\n"), "utf8"), "Collision Test")
+    expect(parsed.checks.find((check) => check.code === "SHOW_PROGRAM_AIR_CONFLICT")).toMatchObject({ passed: false })
+  })
+
+  it("finds a crossing at a non-midpoint using relative segment motion", () => {
+    const rows = ["aircraft_id,time_ms,east_m,north_m,up_m"]
+    rows.push("UAV-001,0,-10,0,20", "UAV-001,10000,30,0,20")
+    rows.push("UAV-002,0,0,-10,20", "UAV-002,10000,0,30,20")
+    for (let index = 2; index < 100; index += 1) {
+      const east = 100 + (index % 10) * 8
+      const north = Math.floor(index / 10) * 8
+      rows.push(`UAV-${String(index + 1).padStart(3, "0")},0,${east},${north},20`)
+      rows.push(`UAV-${String(index + 1).padStart(3, "0")},10000,${east},${north},20`)
+    }
+    const parsed = parseShowProgramCsv(Buffer.from(rows.join("\n"), "utf8"), "Crossing Test")
+    expect(parsed.checks.find((check) => check.code === "SHOW_PROGRAM_AIR_CONFLICT")).toMatchObject({ passed: false })
+  })
 })
 
 function csv(aircraftCount: number): Buffer {
   const rows = ["aircraft_id,time_ms,east_m,north_m,up_m"]
   for (let index = 1; index <= aircraftCount; index += 1) {
-    rows.push(`UAV-${String(index).padStart(3, "0")},0,${index / 10},0,0`)
-    rows.push(`UAV-${String(index).padStart(3, "0")},10000,${index / 10 + 10},0,20`)
+    const east = ((index - 1) % 50) * 8
+    const north = Math.floor((index - 1) / 50) * 8
+    rows.push(`UAV-${String(index).padStart(3, "0")},0,${east},${north},0`)
+    rows.push(`UAV-${String(index).padStart(3, "0")},10000,${east + 2},${north},20`)
   }
   return Buffer.from(rows.join("\n"), "utf8")
 }

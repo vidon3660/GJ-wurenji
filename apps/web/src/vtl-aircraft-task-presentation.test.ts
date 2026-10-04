@@ -9,7 +9,7 @@ const task = (id: string): VtlTaskObjectView => ({
   type: "POINT",
   positions: [],
   requirement: "完成巡检",
-  completionRule: "采集证据",
+  completionRule: "采集运行数据",
   required: true,
   estimatedWorkSeconds: 60,
   status: "ASSIGNED",

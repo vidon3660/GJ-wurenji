@@ -173,7 +173,7 @@ export class SeedService implements OnApplicationBootstrap {
             { name: "航线与能量", weight: 30, metrics: ["阶段完整", "地形净空", "能量余度", "备降方案"] },
             { name: "检查与运行", weight: 25, metrics: ["单机检查", "多机关系", "执行计划", "阶段观察"] },
             { name: "事件处置", weight: 15, metrics: ["响应时间", "任务转移", "集群重组"] },
-            { name: "复盘质量", weight: 10, metrics: ["未完成原因", "改进建议"] }
+            { name: "运行结果分析", weight: 10, metrics: ["未完成原因", "改进建议"] }
           ]
         : [
           { name: "飞行安全", weight: 40, metrics: ["碰撞", "间距", "越界"] },

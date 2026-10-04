@@ -16,7 +16,8 @@ import type {
   V3AlertSeverity,
   V3ProjectEvaluationView,
   V3RuntimeActionReasoning,
-  V3StageCode
+  V3StageCode,
+  V3ResourceValidationCheck
 } from "@wurenji/shared"
 import { UserEntity } from "../../entities.js"
 import { ActivityLogService } from "../activities/activity-log.service.js"
@@ -89,9 +90,11 @@ export class ShowReviewService {
     const { project, actor } = await this.requireProjectAccess(projectId, user)
     this.requireShowProject(project)
     const stage = await this.requireReviewStage(projectId)
-    if (actor === "STUDENT" && ["LOCKED", "AVAILABLE", "RETURNED"].includes(stage.status)) throw new ConflictException("请先开始复盘评价阶段")
+    if (actor === "STUDENT" && ["LOCKED", "AVAILABLE", "RETURNED"].includes(stage.status)) throw new ConflictException("请先开始运行结果评价阶段")
     const sources = await this.loadSources(projectId)
-    const metrics = computeShowObjectiveMetrics(sources)
+    const showProgramRef = project.snapshot.resourceRefs.find((item) => item.packageType === "SHOW_PROGRAM")
+    const programChecks = await this.resourcePackages.showProgramValidationChecks(showProgramRef?.packageId)
+    const metrics = computeShowObjectiveMetrics(sources, programChecks)
     const evaluation = await this.ensureEvaluation(project, metrics)
     if (evaluation.status !== "PUBLISHED" && canonicalJson(evaluation.objectiveMetrics) !== canonicalJson(metrics)) {
       evaluation.objectiveMetrics = metrics
@@ -198,7 +201,7 @@ export class ShowReviewService {
       const { project, actor } = await this.requireProjectAccess(projectId, user, manager)
       if (actor !== "TEACHER") throw new ForbiddenException("仅教师可以发布综合评价")
       const stage = await this.lockReviewStage(manager, projectId)
-      if (stage.status !== "SUBMITTED") throw new ConflictException("复盘评价阶段不在待发布状态")
+      if (stage.status !== "SUBMITTED") throw new ConflictException("运行结果评价阶段不在待发布状态")
       const evaluation = await this.lockEvaluation(manager, projectId)
       assertRevision(evaluation.revision, expectedRevision)
       const scores = evaluation.teacherScores as unknown as ShowTeacherScoreView[]
@@ -405,15 +408,18 @@ export class ShowReviewService {
       const { project, actor } = await this.requireProjectAccess(projectId, user, manager)
       if (actor !== "STUDENT") throw new ForbiddenException("仅学生可以填写飞后总结")
       const stage = await this.lockReviewStage(manager, projectId)
-      if (stage.status !== "IN_PROGRESS") throw new ConflictException("复盘评价阶段不在可编辑状态")
+      if (stage.status !== "IN_PROGRESS") throw new ConflictException("运行结果评价阶段不在可编辑状态")
       const sources = await this.loadSources(projectId, manager)
-      const evaluation = await this.ensureEvaluation(project, computeShowObjectiveMetrics(sources), manager)
+      const showProgramRef = project.snapshot.resourceRefs.find((item) => item.packageType === "SHOW_PROGRAM")
+      const programChecks = await this.resourcePackages.showProgramValidationChecks(showProgramRef?.packageId, manager)
+      const metrics = computeShowObjectiveMetrics(sources, programChecks)
+      const evaluation = await this.ensureEvaluation(project, metrics, manager)
       if (evaluation.studentSubmittedAt) throw new ConflictException("飞后总结已提交")
       assertRevision(evaluation.revision, expectedRevision)
       const normalizedSummary = normalizeShowStudentSummary(summaryValue, structuredSummary, submit)
       const beforeRevision = evaluation.revision
       evaluation.studentSummary = normalizedSummary.stored
-      evaluation.objectiveMetrics = computeShowObjectiveMetrics(sources)
+      evaluation.objectiveMetrics = metrics
       evaluation.revision += 1
       if (submit) {
         const now = new Date()
@@ -617,13 +623,13 @@ export class ShowReviewService {
 
   private async requireReviewStage(projectId: string): Promise<StudentProjectStageEntity> {
     const stage = await this.stages.findOne({ where: { project: { id: projectId }, stageCode: "SHOW_REVIEW" } })
-    if (!stage) throw new NotFoundException("复盘评价阶段不存在")
+    if (!stage) throw new NotFoundException("运行结果评价阶段不存在")
     return stage
   }
 
   private async lockReviewStage(manager: EntityManager, projectId: string): Promise<StudentProjectStageEntity> {
     const stage = await manager.findOne(StudentProjectStageEntity, { where: { project: { id: projectId }, stageCode: "SHOW_REVIEW" }, lock: { mode: "pessimistic_write" } })
-    if (!stage) throw new NotFoundException("复盘评价阶段不存在")
+    if (!stage) throw new NotFoundException("运行结果评价阶段不存在")
     return stage
   }
 
@@ -781,7 +787,10 @@ function cohortMetrics(target: Map<string, { label: string; count: number }>, de
     .slice(0, limit)
 }
 
-export function computeShowObjectiveMetrics(sources: Pick<ReviewSources, "session" | "events" | "alerts" | "actions" | "reports">): ShowObjectiveMetricView[] {
+export function computeShowObjectiveMetrics(
+  sources: Pick<ReviewSources, "session" | "events" | "alerts" | "actions" | "reports">,
+  programChecks: readonly V3ResourceValidationCheck[] = []
+): ShowObjectiveMetricView[] {
   const triggered = sources.events.filter((item) => item.triggeredAt)
   const detected = triggered.filter((item) => eventNumber(item, "detectedSimulationTimeMs") !== null)
   const controlled = triggered.filter((item) => eventNumber(item, "controlledSimulationTimeMs") !== null || item.status === "RESOLVED")
@@ -809,6 +818,12 @@ export function computeShowObjectiveMetrics(sources: Pick<ReviewSources, "sessio
   const deadlineResults = sources.actions.map((action) => action.result?.withinDeadline).filter((value): value is boolean => typeof value === "boolean")
   const deadlinePassRate = ratio(deadlineResults.filter(Boolean).length, deadlineResults.length) * 100
   const flightTimeSeconds = sources.session ? Math.max(0, Number(sources.session.simulationTimeMs) / 1_000) : null
+  const failedProgramChecks = programChecks.filter((check) => !check.passed)
+  const programCheckDetail = programChecks.length === 0
+    ? "未引用导入表演轨迹或资源未提供校验结果"
+    : failedProgramChecks.length === 0
+      ? `${programChecks.length} 项轨迹校验通过`
+      : `${failedProgramChecks.length} 项轨迹校验未通过：${failedProgramChecks.map((check) => check.message).join("；")}`
   return [
     metric("PROCESS_COMPLETION", "流程完成度", endReport?.status === "SUBMITTED" ? 100 : 0, "%", endReport?.status === "SUBMITTED" ? "PASS" : "RISK", endReport?.status === "SUBMITTED" ? "飞行结束报备已提交" : "飞行结束报备未提交"),
     metric("FLIGHT_TIME", "表演运行时长", flightTimeSeconds === null ? "未生成" : flightTimeSeconds, flightTimeSeconds === null ? null : "秒", flightTimeSeconds === null ? "INFO" : "INFO", flightTimeSeconds === null ? "运行尚未开始" : "按统一仿真时钟计算"),
@@ -819,8 +834,9 @@ export function computeShowObjectiveMetrics(sources: Pick<ReviewSources, "sessio
     metric("EVENT_ESCALATION", "事件升级数量", escalated.length, "个", escalated.length === 0 ? "PASS" : "RISK", escalated.length ? "存在未及时控制并升级的事件" : "未发生事件升级"),
     metric("ALERT_ACKNOWLEDGEMENT", "告警确认率", ratio(acknowledged, sources.alerts.length) * 100, "%", sources.alerts.length === 0 || acknowledged === sources.alerts.length ? "PASS" : "RISK", `${acknowledged}/${sources.alerts.length} 条告警已确认或解决`),
     metric("LANDING_ACCOUNTING", "降落清点一致性", normalLandedCount + abnormalCount === actualTakeoffCount ? "一致" : "不一致", null, normalLandedCount + abnormalCount === actualTakeoffCount ? "PASS" : "RISK", `实际起飞 ${actualTakeoffCount} 架，正常 ${normalLandedCount} 架，异常 ${abnormalCount} 架`),
-    metric("LANDING_ACCURACY", "降落判定正确性", landingAnswerCorrect ? "正确" : "待核对", null, endReport?.status !== "SUBMITTED" ? "INFO" : landingAnswerCorrect ? "PASS" : "RISK", `系统权威结果：正常 ${authoritativeNormalLandedCount} 架，异常 ${authoritativeAbnormalCount} 架，状态 ${expectedStatus}`),
-    metric("MISSION_RESULT", "固定程序结果", sources.session?.status ?? "未运行", null, sources.session?.status === "COMPLETED" ? "PASS" : sources.session?.status === "ABORTED" ? "RISK" : "INFO", sources.session?.status === "COMPLETED" ? "固定表演程序正常完成" : `运行状态：${sources.session?.status ?? "无"}`)
+    metric("LANDING_ACCURACY", "降落判定正确性", landingAnswerCorrect ? "正确" : "待核对", null, endReport?.status !== "SUBMITTED" ? "INFO" : landingAnswerCorrect ? "PASS" : "RISK", `系统计算结果：正常 ${authoritativeNormalLandedCount} 架，异常 ${authoritativeAbnormalCount} 架，状态 ${expectedStatus}`),
+    metric("MISSION_RESULT", "固定程序结果", sources.session?.status ?? "未运行", null, sources.session?.status === "COMPLETED" ? "PASS" : sources.session?.status === "ABORTED" ? "RISK" : "INFO", sources.session?.status === "COMPLETED" ? "固定表演程序正常完成" : `运行状态：${sources.session?.status ?? "无"}`),
+    metric("PROGRAM_SPATIAL_CHECK", "表演轨迹空间检查", failedProgramChecks.length === 0 ? "通过" : "不通过", null, programChecks.length === 0 ? "INFO" : failedProgramChecks.length === 0 ? "PASS" : "RISK", programCheckDetail)
   ]
 }
 
