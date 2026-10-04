@@ -45,7 +45,7 @@ import { ShowProjectReportEntity, ShowReviewAnnotationEntity } from "../show-rev
 import { applyReviewVisibility, canAccessFullReviewReport } from "../show-review/review-visibility.js"
 import { runtimeActionReasoningFromPayload } from "../runtime/runtime-action-reasoning.js"
 import { buildRuntimeEvidence } from "../runtime/runtime-evidence.js"
-import { computeLogisticsReviewAnalysis } from "./logistics-review-analysis.js"
+import { computeLogisticsReviewAnalysis, isOnTimeArrival, logisticsOnTimeRate } from "./logistics-review-analysis.js"
 import { logisticsStudentSummaryText, normalizeLogisticsStudentSummary, parseLogisticsStudentSummary } from "./logistics-review-summary.js"
 import { serializeLogisticsReviewSnapshotFields } from "./logistics-review-contract.js"
 import { assessmentTimingForProject } from "../assessment/assessment-window.service.js"
@@ -551,7 +551,7 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
   const averageResponse = responseSeconds.length ? round(responseSeconds.reduce((sum, value) => sum + value, 0) / responseSeconds.length, 1) : 0
   const deadlineResults = sources.actions.map((action) => action.result?.withinDeadline).filter((value): value is boolean => typeof value === "boolean")
   const deadlinePassRate = ratio(deadlineResults.filter(Boolean).length, deadlineResults.length) * 100
-  const onTime = sources.snapshots.at(-1)?.projection.orders.filter((item) => item.status === "COMPLETED" && item.expectedArrivalTimeMs !== null && item.expectedArrivalTimeMs <= item.latestArrivalTimeMs).length ?? 0
+  const onTime = sources.snapshots.at(-1)?.projection.orders.filter((item) => item.status === "COMPLETED" && isOnTimeArrival(item.expectedArrivalTimeMs, item.latestArrivalTimeMs)).length ?? 0
   const routePassed = sources.validation?.status === "PASSED" || sources.validation?.status === "WITH_RISK"
   const schedulePassed = Boolean(sources.schedule?.checkResult.submittable)
   const dynamicCount = currentAttemptActivities(sources).filter((item) => item.eventType === "LOGISTICS_DYNAMIC_SCHEDULE_SUBMITTED").length
@@ -559,7 +559,7 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
     metric("ROUTE_VALIDATION", "航线验证", routePassed ? "通过" : "待复核", null, routePassed ? "PASS" : "RISK", sources.validation ? `第 ${sources.validation.attemptNo} 次验证，${sources.validation.status}` : "尚未找到验证记录"),
     metric("SCHEDULE_QUALITY", "调度方案质量", schedulePassed ? "可执行" : "存在冲突", null, schedulePassed ? "PASS" : "RISK", sources.schedule ? `V${sources.schedule.versionNo}，${sources.schedule.checkResult.conflictCount} 个硬冲突` : "尚未提交正式调度"),
     metric("ORDER_COMPLETION", "订单完成率", ratio(completedOrders, orders.length) * 100, "%", completedOrders === orders.length && orders.length > 0 ? "PASS" : "RISK", `${completedOrders}/${orders.length} 单完成，${failedOrders} 单失败`),
-    metric("ON_TIME_DELIVERY", "准时到达率", ratio(onTime, completedOrders) * 100, "%", onTime === completedOrders && completedOrders > 0 ? "PASS" : "RISK", `${onTime}/${completedOrders} 个已完成订单在时间窗内`),
+    metric("ON_TIME_DELIVERY", "准时到达率", logisticsOnTimeRate(onTime, completedOrders, delayedOrders) * 100, "%", onTime === completedOrders + delayedOrders && completedOrders + delayedOrders > 0 ? "PASS" : "RISK", `${onTime}/${completedOrders + delayedOrders} 个已完成或延误订单在时间窗内`),
     metric("RISK_IDENTIFICATION", "告警发现率", ratio(discovered.length, triggered.length) * 100, "%", triggered.length === 0 || discovered.length === triggered.length ? "PASS" : "RISK", `${discovered.length}/${triggered.length} 个运行事件已发现`),
     metric("AVG_RESPONSE_SECONDS", "平均处置时效", averageResponse, "秒", triggered.length === 0 || averageResponse <= 60 ? "PASS" : "RISK", responseSeconds.length ? `按 ${responseSeconds.length} 次关联处置统计` : "没有可匹配处置动作"),
     metric("ACTION_DEADLINE", "处置时限达标率", deadlinePassRate, "%", deadlineResults.length === 0 || deadlinePassRate === 100 ? "PASS" : "RISK", deadlineResults.length ? `${deadlineResults.filter(Boolean).length}/${deadlineResults.length} 次关联处置在教师设定时限内` : "教师未设置处置时限"),
