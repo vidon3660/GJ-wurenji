@@ -90,4 +90,12 @@ describe("onboarding flow", () => {
     storage.setItem("wurenji:onboarding:student-1:student-basics:v2:mission", JSON.stringify({ action: "student-first-stage", sceneType: "OLD_SCENE" }))
     expect(loadOnboardingMission(storage, "student-1", state)).toEqual({ action: "student-first-stage", sceneType: null })
   })
+
+  it("restores the real question-bank actions used by the first-run path", () => {
+    const storage = memoryStorage()
+    saveOnboardingMission(storage, "teacher-1", { ...state, guideKey: "teacher-basics" }, { action: "teacher-first-question-bank", sceneType: "CITY_LOGISTICS" })
+    expect(loadOnboardingMission(storage, "teacher-1", { ...state, guideKey: "teacher-basics" })).toEqual({ action: "teacher-first-question-bank", sceneType: "CITY_LOGISTICS" })
+    saveOnboardingMission(storage, "student-1", state, { action: "student-first-questionnaire", sceneType: "CITY_SHOW" })
+    expect(loadOnboardingMission(storage, "student-1", state)).toEqual({ action: "student-first-questionnaire", sceneType: "CITY_SHOW" })
+  })
 })
