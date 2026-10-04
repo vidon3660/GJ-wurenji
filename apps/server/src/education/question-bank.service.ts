@@ -476,13 +476,20 @@ export class QuestionBankService {
 
   async saveQuestionnaire(projectId: string, user: AuthUser, input: QuestionAttemptSaveInput, submit = false): Promise<QuestionnaireView> {
     if (user.role !== "student") throw new ForbiddenException("仅学生可以提交题库作答")
-    await this.assessmentWindows.assertWritable(projectId, user, false)
+    // A submit request can be retried after a network timeout. Once the
+    // attempt has reached a terminal state, returning the current view keeps
+    // the operation idempotent while ordinary draft saves remain protected by
+    // a conflict response.
     await this.dataSource.transaction(async (manager) => {
       const project = await this.lockProject(manager, projectId)
       if (project.student.id !== user.id) throw new ForbiddenException("无权操作该学生项目")
       const version = await this.requireProjectQuestionBank(manager, project)
       let attempt = await this.lockAttempt(manager, project.id, version.id)
-      if (attempt?.status !== undefined && attempt.status !== "IN_PROGRESS") throw new ConflictException("本次题库作答已经提交，不能继续修改")
+      if (attempt?.status !== undefined && attempt.status !== "IN_PROGRESS") {
+        if (!submit) throw new ConflictException("本次题库作答已经提交，不能继续修改")
+        return
+      }
+      await this.assessmentWindows.assertWritable(projectId, user, false)
       const timing = assessmentTimingForProject(project)
       if (!timing.canWrite) throw new ConflictException(timing.blockedReason ?? "当前项目暂不能保存题库作答")
       const questions = normalizeQuestionDefinitions(version.questions, true)
