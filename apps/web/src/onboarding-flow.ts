@@ -1,6 +1,11 @@
 import type { OnboardingState, SceneType } from "@wurenji/shared"
 
-export type OnboardingAction = "teacher-first-assignment" | "student-first-stage"
+/**
+ * Actions in the first-run guide are deliberately tied to a real control in
+ * the product.  Keep the original stage action for users who started guide
+ * version 2 before the question-bank path was added.
+ */
+export type OnboardingAction = "teacher-first-question-bank" | "teacher-first-assignment" | "student-first-questionnaire" | "student-first-stage"
 
 export interface OnboardingMission {
   action: OnboardingAction
@@ -126,7 +131,7 @@ export function loadOnboardingMission(storage: StorageLike, userId: string, stat
   if (!serialized) return null
   try {
     const value = JSON.parse(serialized) as Partial<OnboardingMission>
-    if (value.action !== "teacher-first-assignment" && value.action !== "student-first-stage") return null
+    if (value.action !== "teacher-first-question-bank" && value.action !== "teacher-first-assignment" && value.action !== "student-first-questionnaire" && value.action !== "student-first-stage") return null
     return { action: value.action, sceneType: parseSceneType(value.sceneType) }
   } catch {
     return null
