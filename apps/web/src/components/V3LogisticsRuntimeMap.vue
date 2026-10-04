@@ -55,7 +55,7 @@ import { loadV3MapResources } from "../map-resources-loader"
 import type { RegionTerrainState } from "../terrain"
 import { captureV3Camera, configureRegionMapConstraints, focusV3Coordinates, focusV3Region, regionMaskHierarchy, restoreV3Camera, v3CameraDiagnostics, type V3CameraDiagnostics } from "../map-region-constraints"
 import { renderRegionStaticFeatures } from "../map-static-features"
-import { buildingHeightMeters, resolveBuildingDataUrl } from "../map-building-layer"
+import { buildingHeightMeters, hasRenderableOfflineBuildingFeatures, resolveBuildingDataUrl } from "../map-building-layer"
 import { resetV3CameraNorth, rotateV3Camera, setV3CameraPreset, zoomV3Camera } from "../map-region-constraints"
 import V3MapViewControls from "./V3MapViewControls.vue"
 import V3MapScaleBar from "./V3MapScaleBar.vue"
@@ -283,9 +283,17 @@ async function loadOfflineLogisticsResources() {
     }
     offlineBuildingsSource = source
     viewer.dataSources.add(source)
+    // The static manifest is rendered before this asynchronous package.
+    // Re-render once polygons are available so the authoritative footprints
+    // replace only the duplicate building polygons.
+    renderStatic(false)
     syncOfflineBuildingMode()
   } catch {
-    if (generation === offlineBuildingGeneration) offlineBuildingsSource = null
+    if (generation === offlineBuildingGeneration) {
+      offlineBuildingsSource = null
+      // If a refresh fails, restore the manifest buildings immediately.
+      renderStatic(false)
+    }
   }
 }
 
@@ -427,7 +435,15 @@ function renderStatic(focus = true) {
       point: { pixelSize: node.type === "CENTER_AIRPORT" ? 10 : 6, color, outlineColor: Color.WHITE, outlineWidth: 2, heightReference: HeightReference.RELATIVE_TO_GROUND, disableDepthTestDistance: Number.POSITIVE_INFINITY }
     })
   }
-  renderRegionStaticFeatures(staticSource, props.region, props.mode, "logistics-runtime-static")
+  const offlineBuildingFeatureCount = offlineBuildingsSource?.entities.values.filter((entity) => Boolean(entity.polygon)).length ?? 0
+  renderRegionStaticFeatures(
+    staticSource,
+    props.region,
+    props.mode,
+    "logistics-runtime-static",
+    undefined,
+    { skipBuildingFootprints: hasRenderableOfflineBuildingFeatures(offlineBuildingFeatureCount) }
+  )
   updateStaticFeatureSummary()
   if (focus && viewer) focusV3Region(viewer, props.region, props.mode, 0.3)
   viewer.scene.requestRender()
