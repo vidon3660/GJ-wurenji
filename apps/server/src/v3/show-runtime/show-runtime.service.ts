@@ -732,7 +732,11 @@ export class ShowRuntimeService {
         name: programPackage?.name ?? "固定表演程序",
         version: programPackage?.version ?? null,
         sourceSoftware: showProgramSourceSoftware(programPackage?.manifest),
-        imported: Boolean(checkpoint.programTracks?.length)
+        imported: Boolean(checkpoint.programTracks?.length),
+        // Keep the normalized group keyframes in the workspace contract so
+        // browser replay follows the imported program instead of falling back
+        // to a synthetic orbit between server snapshots.
+        groupTracks: checkpoint.programTracks ?? []
       },
       remainingMs: Math.max(0, checkpoint.durationMs - Number(session.simulationTimeMs)),
       actualTakeoffAt: takeoffReport?.submittedAt?.toISOString() ?? null,
