@@ -556,6 +556,13 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
   const schedulePassed = Boolean(sources.schedule?.checkResult.submittable)
   const dynamicCount = currentAttemptActivities(sources).filter((item) => item.eventType === "LOGISTICS_DYNAMIC_SCHEDULE_SUBMITTED").length
   const strictMetrics = computeLogisticsSimulationMetrics(sources)
+  const orderCompletionMetric = orders.length === 0
+    ? metric("ORDER_COMPLETION", "订单完成率", "—", null, "INFO", "尚未生成正式订单批次")
+    : metric("ORDER_COMPLETION", "订单完成率", ratio(completedOrders, orders.length) * 100, "%", completedOrders === orders.length ? "PASS" : "RISK", `${completedOrders}/${orders.length} 单完成，${failedOrders} 单失败`)
+  const completedOrDelayed = completedOrders + delayedOrders
+  const onTimeMetric = completedOrDelayed === 0
+    ? metric("ON_TIME_DELIVERY", "准时到达率", "—", null, "INFO", "尚未生成运行到达记录")
+    : metric("ON_TIME_DELIVERY", "准时到达率", logisticsOnTimeRate(onTime, completedOrders, delayedOrders) * 100, "%", onTime === completedOrDelayed ? "PASS" : "RISK", `${onTime}/${completedOrDelayed} 个已完成或延误订单在时间窗内`)
   return [
     metric("ROUTE_VALIDATION", "航线验证", routePassed ? "通过" : "待复核", null, routePassed ? "PASS" : "RISK", sources.validation ? `第 ${sources.validation.attemptNo} 次验证，${sources.validation.status}` : "尚未找到验证记录"),
     metric("SCHEDULE_QUALITY", "调度方案质量", schedulePassed ? "可执行" : "存在冲突", null, schedulePassed ? "PASS" : "RISK", sources.schedule ? `V${sources.schedule.versionNo}，${sources.schedule.checkResult.conflictCount} 个硬冲突` : "尚未提交正式调度"),
@@ -566,8 +573,8 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
     strictMetrics.performanceLimit,
     strictMetrics.energyReserve,
     strictMetrics.energyConsumption,
-    metric("ORDER_COMPLETION", "订单完成率", ratio(completedOrders, orders.length) * 100, "%", completedOrders === orders.length && orders.length > 0 ? "PASS" : "RISK", `${completedOrders}/${orders.length} 单完成，${failedOrders} 单失败`),
-    metric("ON_TIME_DELIVERY", "准时到达率", logisticsOnTimeRate(onTime, completedOrders, delayedOrders) * 100, "%", onTime === completedOrders + delayedOrders && completedOrders + delayedOrders > 0 ? "PASS" : "RISK", `${onTime}/${completedOrders + delayedOrders} 个已完成或延误订单在时间窗内`),
+    orderCompletionMetric,
+    onTimeMetric,
     metric("RISK_IDENTIFICATION", "告警发现率", ratio(discovered.length, triggered.length) * 100, "%", triggered.length === 0 || discovered.length === triggered.length ? "PASS" : "RISK", `${discovered.length}/${triggered.length} 个运行事件已发现`),
     metric("AVG_RESPONSE_SECONDS", "平均处置时效", averageResponse, "秒", triggered.length === 0 || averageResponse <= 60 ? "PASS" : "RISK", responseSeconds.length ? `按 ${responseSeconds.length} 次关联处置统计` : "没有可匹配处置动作"),
     metric("ACTION_DEADLINE", "处置时限达标率", deadlinePassRate, "%", deadlineResults.length === 0 || deadlinePassRate === 100 ? "PASS" : "RISK", deadlineResults.length ? `${deadlineResults.filter(Boolean).length}/${deadlineResults.length} 次关联处置在教师设定时限内` : "教师未设置处置时限"),
@@ -669,14 +676,20 @@ function computeLogisticsSimulationMetrics(sources: LogisticsReviewSources): {
     riskCount = 0
   ): ShowObjectiveMetricView => metric(code, label, sourceExists ? count : "—", sourceExists ? "项" : null, sourceExists ? (count === 0 && riskCount === 0 ? "PASS" : "RISK") : "INFO", sourceExists ? detail : "尚未完成对应仿真计算")
 
+  const buildingConflicts = buildingEvidence.filter((item) => item.severity === "CONFLICT").length
+  const buildingRisks = buildingEvidence.filter((item) => item.severity === "RISK").length
+  const spatialConflicts = spatialEvidence.filter((item) => item.severity === "CONFLICT").length
+  const spatialRisks = spatialEvidence.filter((item) => item.severity === "RISK").length
+  const performanceConflicts = performanceEvidence.filter((item) => item.severity === "CONFLICT").length
+  const performanceRisks = performanceEvidence.filter((item) => item.severity === "RISK").length
   return {
     flightTime: maxFlightTime === null
       ? noRun("FLIGHT_TIME", "最大往返飞行时间")
       : metric("FLIGHT_TIME", "最大往返飞行时间", maxFlightTime, "秒", "INFO", `根据 ${durations.length} 个已计算任务的计划航段时长`),
-    buildingCollision: countMetric("BUILDING_COLLISION", "建筑物与禁限飞冲突", buildingEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation), `${buildingEvidence.length} 项建筑物、障碍物或禁限飞区空间检查记录`),
-    spaceConflict: countMetric("SPACE_CONFLICT", "航线空间冲突", spatialEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation), `${spatialEvidence.length} 项航线空间关系检查记录`),
+    buildingCollision: countMetric("BUILDING_COLLISION", "建筑物与禁限飞冲突", buildingConflicts, Boolean(validation), `${buildingEvidence.length} 项建筑物、障碍物或禁限飞区空间检查记录`, buildingRisks),
+    spaceConflict: countMetric("SPACE_CONFLICT", "航线空间冲突", spatialConflicts, Boolean(validation), `${spatialEvidence.length} 项航线空间关系检查记录`, spatialRisks),
     airConflict: countMetric("AIR_CONFLICT", "空中交通冲突", airConflictEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(scheduleCheck), `${airConflictEvidence.length} 项调度时段与航线关系检查记录`, airConflictEvidence.filter((item) => item.severity === "RISK").length),
-    performanceLimit: countMetric("PERFORMANCE_LIMIT", "机型性能限制", performanceEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation || scheduleCheck), `${performanceEvidence.length} 项高度、速度、航程或可用性检查记录`),
+    performanceLimit: countMetric("PERFORMANCE_LIMIT", "机型性能限制", performanceConflicts, Boolean(validation || scheduleCheck), `${performanceEvidence.length} 项高度、速度、航程或可用性检查记录`, performanceRisks),
     energyReserve: minimumReserve === null
       ? noRun("ENERGY_RESERVE", "任务结束最低剩余电量")
       : metric("ENERGY_RESERVE", "任务结束最低剩余电量", minimumReserve, "%", minimumReserve >= 20 ? "PASS" : "RISK", `根据 ${reserveValues.length} 个任务的电量结果，安全余量阈值 20%`),
