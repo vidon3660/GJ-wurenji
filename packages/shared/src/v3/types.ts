@@ -2287,6 +2287,8 @@ export interface ShowRuntimeWorkspaceView {
     version: string | null
     sourceSoftware: string | null
     imported: boolean
+    /** Group-level ENU keyframes used to reconstruct imported trajectories in replay. */
+    groupTracks?: ShowProgramGroupTrack[]
   }
   remainingMs: number
   actualTakeoffAt: string | null
