@@ -54,7 +54,16 @@ if (!report.passed) process.exitCode = 1
 
 async function enterTeacher(page) {
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" })
-  await page.getByRole("button", { name: "教师演示", exact: true }).click()
+  const loginPage = page.locator(".login-page")
+  if (await loginPage.isVisible().catch(() => false)) {
+    await page.getByRole("button", { name: /^教师演示/ }).first().click()
+    const teacherPassword = process.env.DEMO_TEACHER_PASSWORD
+    if (!teacherPassword) {
+      throw new Error("场景入口验收需要登录教师账号；请设置 DEMO_TEACHER_PASSWORD，或传入已有登录会话")
+    }
+    await page.locator('input[name="password"]').fill(teacherPassword)
+    await page.getByRole("button", { name: "登录平台", exact: true }).click()
+  }
   await page.locator(".platform-shell").waitFor({ timeout: 15_000 })
   await page.locator(".platform-shell .el-loading-mask").waitFor({ state: "hidden", timeout: 15_000 })
   const skip = page.getByRole("button", { name: "跳过引导", exact: true })
