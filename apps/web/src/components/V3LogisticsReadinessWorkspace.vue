@@ -104,9 +104,9 @@ async function runCheck() {
       method: "POST",
       body: JSON.stringify({ expectedRevision: workspace.value.readiness.revision })
     }))
-    ElMessage.success(failCount.value === 0 ? "运行条件复核通过" : `复核完成，仍有 ${failCount.value} 项阻断`)
+    ElMessage.success(failCount.value === 0 ? "运行条件检查通过" : `检查完成，仍有 ${failCount.value} 项阻断`)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "运行条件复核失败")
+    ElMessage.error(error instanceof Error ? error.message : "运行条件检查失败")
   } finally {
     loading.value = false
   }
@@ -148,12 +148,12 @@ function checkStatusLabel(value: string) {
 <template>
   <section class="logistics-readiness-workspace" v-loading="loading">
     <header class="readiness-header">
-      <div><h2>配送运行准备</h2><p>基于正式航线、订单、机队和初始调度执行权威复核</p></div>
+      <div><h2>配送运行准备</h2><p>基于正式航线、订单、机队和初始调度执行系统检查</p></div>
       <dl><div><dt>通过</dt><dd>{{ passCount }}</dd></div><div><dt>关注</dt><dd class="warning">{{ warningCount }}</dd></div><div><dt>阻断</dt><dd class="danger">{{ failCount }}</dd></div><div><dt>调度版本</dt><dd>V{{ workspace?.submittedSchedule.versionNo ?? '-' }}</dd></div></dl>
       <el-button :icon="Refresh" circle title="刷新运行准备" @click="loadWorkspace" />
     </header>
 
-    <div v-if="loadError && !workspace" class="readiness-load-error readiness-load-error-full" role="alert" aria-live="assertive"><span><strong>运行准备数据加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的权威复核结果，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="loading" @click="loadWorkspace">重新加载运行准备</el-button></div>
+    <div v-if="loadError && !workspace" class="readiness-load-error readiness-load-error-full" role="alert" aria-live="assertive"><span><strong>运行准备数据加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的系统检查结果，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="loading" @click="loadWorkspace">重新加载运行准备</el-button></div>
 
     <main v-if="workspace || !loadError" class="readiness-checks">
       <div v-if="loadError && workspace" class="readiness-load-error" role="alert" aria-live="assertive"><span><strong>运行准备数据同步失败</strong><small>{{ loadError }}</small><p>当前检查结果和决策内容已保留，确认进入运行前请先重试同步。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" @click="loadWorkspace">重试同步</el-button></div>
@@ -176,15 +176,15 @@ function checkStatusLabel(value: string) {
       <el-radio-group v-model="decision" :disabled="!canEdit" class="readiness-decisions">
         <el-radio-button v-for="option in decisionOptions" :key="option.value" :value="option.value">{{ option.label }}</el-radio-button>
       </el-radio-group>
-      <label><span>判断依据</span><el-input v-model="decisionBasis" :disabled="!canEdit" type="textarea" :rows="6" maxlength="2000" show-word-limit placeholder="记录对航线、调度、机队和环境的复核依据" /></label>
+      <label><span>判断依据</span><el-input v-model="decisionBasis" :disabled="!canEdit" type="textarea" :rows="6" maxlength="2000" show-word-limit placeholder="记录对航线、调度、机队和环境的检查依据" /></label>
       <div class="readiness-gate-state" :class="{ passed: gatePresentation.passed }">
         <el-icon><Check v-if="gatePresentation.passed" /><Warning v-else /></el-icon>
         <div><strong>{{ gatePresentation.title }}</strong><span>{{ gatePresentation.detail }}</span></div>
       </div>
-      <footer v-if="canEdit"><el-button @click="save()">保存结论</el-button><el-button @click="runCheck">重新复核</el-button><el-button type="primary" :disabled="!workspace?.canConfirm" :icon="CircleCheck" @click="confirmReadiness">确认进入运行</el-button></footer>
+      <footer v-if="canEdit"><el-button @click="save()">保存结论</el-button><el-button @click="runCheck">重新检查</el-button><el-button type="primary" :disabled="!workspace?.canConfirm" :icon="CircleCheck" @click="confirmReadiness">确认进入运行</el-button></footer>
       <div v-else class="readiness-readonly"><strong>{{ workspace?.readiness.status === 'CONFIRMED' ? '确认记录已锁定' : '教师只读查看' }}</strong><span>{{ workspace?.readiness.confirmedAt ? formatPlatformDateTime(workspace.readiness.confirmedAt) : '等待学生形成运行决策' }}</span></div>
     </aside>
-    <aside v-else class="readiness-decision readiness-decision-error" role="alert"><div><strong>运行准备暂不可用</strong><span>复核结果加载成功后，才能形成运行决策或进入配送运行。</span><el-button type="primary" :icon="Refresh" :loading="loading" @click="loadWorkspace">重新加载</el-button></div></aside>
+    <aside v-else class="readiness-decision readiness-decision-error" role="alert"><div><strong>运行准备暂不可用</strong><span>检查结果加载成功后，才能形成运行决策或进入配送运行。</span><el-button type="primary" :icon="Refresh" :loading="loading" @click="loadWorkspace">重新加载</el-button></div></aside>
   </section>
 </template>
 

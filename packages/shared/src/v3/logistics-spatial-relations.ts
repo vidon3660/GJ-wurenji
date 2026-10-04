@@ -14,6 +14,7 @@ export interface LogisticsRouteSpatialRelation {
   waypointIds: [string, string]
   position: V3Coordinate
   segmentAltitudeMeters: number
+  endSegmentAltitudeMeters?: number
   protectionRadiusMeters: number
   featureId: string
   featureName: string
@@ -44,9 +45,13 @@ export function inspectLogisticsRouteSpatialRelations(
       if (horizontal > route.protectionRadiusMeters + featureRadius) continue
       const featureKind = logisticsSpatialFeatureKind(layerCode, feature)
       const featureHeightMeters = finiteHeight(feature.heightMeters)
+      // A segment can descend through a building even when its first point is
+      // above the roof. Use the lower endpoint altitude for the conservative
+      // continuous clearance check.
+      const minimumSegmentAltitudeMeters = Math.min(start.segmentAltitudeMeters, end.segmentAltitudeMeters)
       const verticalClearanceMeters = featureKind === "RESTRICTION" || featureHeightMeters === null
         ? null
-        : round(start.segmentAltitudeMeters - featureHeightMeters, 1)
+        : round(minimumSegmentAltitudeMeters - featureHeightMeters, 1)
       const horizontalRelation: LogisticsHorizontalRelation = horizontal <= centerlineThreshold
         ? "CENTERLINE_CROSSING"
         : "PROTECTION_OVERLAP"
@@ -65,10 +70,11 @@ export function inspectLogisticsRouteSpatialRelations(
         featureKind,
         featureHeightMeters,
         horizontalRelation,
+        endSegmentAltitudeMeters: end.segmentAltitudeMeters,
         horizontalDistanceMeters: round(horizontal, 1),
         verticalClearanceMeters,
         status,
-        message: relationMessage(feature.name, featureKind, horizontalRelation, verticalClearanceMeters, start.segmentAltitudeMeters)
+        message: relationMessage(feature.name, featureKind, horizontalRelation, verticalClearanceMeters, minimumSegmentAltitudeMeters)
       })
     }
   }

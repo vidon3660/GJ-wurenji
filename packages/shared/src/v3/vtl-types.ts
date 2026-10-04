@@ -313,6 +313,11 @@ export interface VtlRuntimeSummaryView {
   incompleteTaskObjects: number
   taskCompletionRatio: number
   phaseDistribution: Partial<Record<VtlFlightPhase, number>>
+  /** Runtime-computed checks exposed to the assessment result. */
+  minimumRemainingEnergyWh?: number
+  energyReserveViolationCount?: number
+  airborneConflictCount?: number
+  executable?: boolean
 }
 
 export const vtlRuntimeEventCategories = [

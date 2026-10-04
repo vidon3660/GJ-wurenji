@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { LogisticsAircraftCapabilityView, LogisticsRouteInput, V3RegionCatalogItem } from "@wurenji/shared"
 import { checkLogisticsRoutePlan, simulateLogisticsRoundTrips } from "./logistics-route.js"
+import { inspectLogisticsRouteSpatialRelations } from "@wurenji/shared"
 
 describe("logistics route rules and round-trip simulation", () => {
   it("accepts a complete student-authored round trip and produces deterministic metrics", () => {
@@ -161,6 +162,23 @@ describe("logistics route rules and round-trip simulation", () => {
         protectionRadiusMeters: 30
       }
     })
+  })
+
+  it("uses the lowest endpoint altitude when a segment descends across a building", () => {
+    const region = fixtureRegion()
+    region.layers.find((layer) => layer.code === "BUILDINGS")!.features.push({
+      id: "tower-descending",
+      name: "下降航段障碍物",
+      geometryType: "POINT",
+      position: { longitude: 114.001, latitude: 22.00322 },
+      heightMeters: 60,
+      properties: { category: "OBSTACLE", radiusMeters: 4 }
+    })
+    const route = fixtureRoutes(region)[0]!
+    route.waypoints[0]!.segmentAltitudeMeters = 100
+    route.waypoints[1]!.segmentAltitudeMeters = 20
+    const relation = inspectLogisticsRouteSpatialRelations(route, region).find((item) => item.featureId === "tower-descending")
+    expect(relation).toMatchObject({ verticalClearanceMeters: -40, endSegmentAltitudeMeters: 20, status: "CONFLICT" })
   })
 })
 

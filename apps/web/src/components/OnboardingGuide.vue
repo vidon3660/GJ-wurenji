@@ -15,16 +15,16 @@ const storage = getOnboardingStorage()
 
 const teacherSteps = [
   { title: "选择教学场景", text: "先确定本次教学目标。表演关注编队与时序，物流关注订单与调度，垂起关注航线、能源和巡检安全。", icon: Collection },
-  { title: "创建首套题库", text: "进入题库管理，新建适用场景的题库，至少添加一道可判分题目，保存版本并发布；学生任务只能绑定已发布版本。", icon: DocumentChecked },
-  { title: "核对区域与任务条件", text: "选择预设区域，核对建筑、限制区、起降点和高程状态；回到任务向导绑定刚发布的题库，再检查规模、时段和事件。", icon: MapLocation },
-  { title: "发布并分发首个任务", text: "从预设区域进入任务向导，确认题库、班级、开放时间和预检结果，点击“确认发布”。系统会在任务真正发布后完成引导。", icon: Promotion, action: { target: "teacher-first-question-bank" as const, label: "进入题库并创建首题" } }
+  { title: "配置首个场景任务", text: "进入场景任务库，配置场景需求、任务项和仿真指标，保存版本并发布；学生任务只能绑定已发布版本。", icon: DocumentChecked },
+  { title: "检查区域与任务条件", text: "选择预设区域，检查建筑、限制区、起降点和高程状态；回到任务向导绑定刚发布的场景任务，再检查规模、时段和事件。", icon: MapLocation },
+  { title: "发布并分发首个任务", text: "从预设区域进入任务向导，确认场景任务、班级、开放时间和预检结果，点击“确认发布”。系统会在任务真正发布后完成引导。", icon: Promotion, action: { target: "teacher-first-question-bank" as const, label: "进入场景任务库并配置任务项" } }
 ]
 
 const studentSteps = [
   { title: "找到当前实训", text: "从待处理任务进入实训，先确认场景、截止时间、当前阶段和唯一下一步。", icon: Collection },
   { title: "按阶段完成规划", text: "先阅读任务条件，再用 2D 完成区域、点位或航线规划，用 3D 检查地形、高度、建筑和安全距离。", icon: MapLocation },
-  { title: "打开题库并提交首份作答", text: "进入实训后点击顶部“题库”，填写可编辑题目并保存草稿；确认内容后点击“提交作答”，提交后会生成自动判定。", icon: DocumentChecked },
-  { title: "查看判定与运行结果", text: "提交后在同一题库面板查看正确、部分得分、未通过和等待仿真证据状态；教师发布评价后可再次打开查看最终结果。", icon: Bell, action: { target: "student-first-questionnaire" as const, label: "进入实训并打开题库" } }
+  { title: "打开场景任务并提交方案", text: "进入实训后打开“方案”，填写航线、调度或处置参数并保存版本；确认方案后点击“提交方案”，系统将运行仿真并计算指标。", icon: DocumentChecked },
+  { title: "查看判定与运行结果", text: "提交后在同一方案面板查看指标状态、风险项和教师评分；教师发布成绩后可再次打开查看最终结果。", icon: Bell, action: { target: "student-first-questionnaire" as const, label: "进入实训并提交方案" } }
 ]
 
 const steps = computed(() => props.user.role === "student" ? studentSteps : teacherSteps)

@@ -79,7 +79,7 @@ let bankLoadSequence = 0
 const selectedVersion = computed(() => selectedBank.value?.versions.find((version) => version.id === selectedVersionId.value) ?? null)
 const isPublished = computed(() => selectedVersion.value?.status === "PUBLISHED")
 const sceneOptions: Array<{ value: SceneType | null; label: string }> = [
-  { value: null, label: "通用题库" },
+  { value: null, label: "通用场景任务" },
   { value: "CITY_SHOW", label: "城市编队表演" },
   { value: "CITY_LOGISTICS", label: "城市低空物流" },
   { value: "VTOL_INSPECTION", label: "垂起广域巡检" }
@@ -135,7 +135,7 @@ async function loadBanks(selectId = selectedBankId.value) {
     }
   } catch (error) {
     if (loadSequence !== bankLoadSequence) return
-    errorText.value = error instanceof Error ? error.message : "题库加载失败"
+    errorText.value = error instanceof Error ? error.message : "场景任务加载失败"
   } finally {
     if (loadSequence === bankLoadSequence) loading.value = false
   }
@@ -147,7 +147,7 @@ async function loadAudit() {
   try {
     audit.value = await api<QuestionBankAuditResult>("/v1/education/question-banks/audit")
   } catch (error) {
-    auditError.value = error instanceof Error ? error.message : "题库审计加载失败"
+    auditError.value = error instanceof Error ? error.message : "任务版本检查加载失败"
   } finally {
     auditLoading.value = false
   }
@@ -169,7 +169,7 @@ async function loadCleanupPreview() {
 async function archiveSelectedEmptyDrafts() {
   if (!selectedCleanupVersionIds.value.length) return
   try {
-    await ElMessageBox.confirm(`将归档 ${selectedCleanupVersionIds.value.length} 个已确认安全的空草稿。操作可追溯且不会删除数据，是否继续？`, "批量归档确认", { type: "warning", confirmButtonText: "确认归档", cancelButtonText: "取消" })
+    await ElMessageBox.confirm(`将归档 ${selectedCleanupVersionIds.value.length} 个已确认安全的空草稿。操作记录可查且不会删除数据，是否继续？`, "批量归档确认", { type: "warning", confirmButtonText: "确认归档", cancelButtonText: "取消" })
     cleanupBatchLoading.value = true
     const result = await api<QuestionBankCleanupBatchResult>("/v1/education/question-banks/cleanup", { method: "POST", body: JSON.stringify({ versionIds: selectedCleanupVersionIds.value }) })
     selectedCleanupVersionIds.value = []
@@ -200,13 +200,13 @@ async function archiveEmptyDraft(item: QuestionBankAuditResult["versions"][numbe
   if (item.issueCategory !== "EMPTY_DRAFT" || item.status !== "DRAFT") return
   try {
     await ElMessageBox.confirm(
-      `归档“${item.bankTitle}”V${item.version} 后，该空草稿会从工作区和待处理列表移出，但审计记录仍会保留。此操作不会删除数据。`,
+      `归档“${item.bankTitle}”V${item.version} 后，该空草稿会从工作区和待处理列表移出，但版本检查记录仍会保留。此操作不会删除数据。`,
       "归档空草稿",
       { type: "warning", confirmButtonText: "确认归档", cancelButtonText: "取消" }
     )
     archivingVersionId.value = item.versionId
     const result = await api<QuestionBankVersionArchiveResult>(`/v1/education/question-banks/${item.bankId}/versions/${item.versionId}/archive`, { method: "POST" })
-    ElMessage.success(result.bankArchived ? "空草稿已归档，题库已从工作区移出" : "空草稿已归档，已恢复到最近可用版本")
+    ElMessage.success(result.bankArchived ? "空草稿已归档，场景任务已从工作区移出" : "空草稿已归档，已恢复到最近可用版本")
     await Promise.all([loadAudit(), loadBanks(selectedBankId.value)])
   } catch (error) {
     if (error === "cancel" || error === "close") return
@@ -255,7 +255,7 @@ async function selectBank(id: string, expectedLoadSequence = bankLoadSequence) {
     syncEditors(detail.questions)
   } catch (error) {
     selectedBankId.value = previousBankId
-    detailError.value = error instanceof Error ? error.message : "题库详情加载失败"
+    detailError.value = error instanceof Error ? error.message : "场景任务详情加载失败"
     ElMessage.error(detailError.value)
   } finally {
     loading.value = false
@@ -287,7 +287,7 @@ function syncEditors(questions: QuestionBankDetail["questions"]) {
 async function confirmDiscardChanges(): Promise<boolean> {
   if (!hasUnsavedChanges.value) return true
   try {
-    await ElMessageBox.confirm("当前版本有未保存的题目或版本说明，切换后这些内容会丢失。确定继续吗？", "放弃未保存内容", {
+    await ElMessageBox.confirm("当前版本有未保存的任务项或版本说明，切换后这些内容会丢失。确定继续吗？", "放弃未保存内容", {
       type: "warning",
       confirmButtonText: "继续切换",
       cancelButtonText: "留在当前版本"
@@ -327,7 +327,7 @@ async function selectVersion(versionId: string) {
     if (version.status === "PUBLISHED") ElMessage.info("已切换到已发布版本，发布版本不可直接修改")
   } catch (error) {
     selectedVersionId.value = previousVersionId
-    detailError.value = error instanceof Error ? error.message : "题库版本加载失败"
+    detailError.value = error instanceof Error ? error.message : "场景任务版本加载失败"
     ElMessage.error(detailError.value)
   } finally {
     loading.value = false
@@ -337,7 +337,7 @@ async function selectVersion(versionId: string) {
 async function createBank() {
   if (saving.value) return
   if (!createForm.value.title.trim() || !createForm.value.summary.trim()) {
-    ElMessage.warning("请填写题库名称和说明")
+    ElMessage.warning("请填写场景任务名称和说明")
     return
   }
   saving.value = true
@@ -347,9 +347,9 @@ async function createBank() {
     showCreate.value = false
     createForm.value = { title: "", sceneType: null, summary: "" }
     await loadBanks(detail.id)
-    ElMessage.success("题库已创建，请继续编辑当前版本")
+    ElMessage.success("场景任务已创建，请继续配置当前版本")
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "题库创建失败")
+    ElMessage.error(error instanceof Error ? error.message : "场景任务创建失败")
   } finally {
     saving.value = false
   }
@@ -360,7 +360,7 @@ async function saveVersion() {
   saving.value = true
   try {
     const questions = editors.value.map(toQuestionInput)
-    const body: QuestionBankVersionInput = { questions, changeNote: versionNote.value.trim() || "更新题目内容" }
+    const body: QuestionBankVersionInput = { questions, changeNote: versionNote.value.trim() || "更新任务项内容" }
     const detail = await api<QuestionBankDetail>(`/v1/education/question-banks/${selectedBank.value.id}/versions`, { method: "POST", body: JSON.stringify(body) })
     versionNote.value = ""
     selectedBank.value = detail
@@ -368,9 +368,9 @@ async function saveVersion() {
     selectedVersionId.value = detail.currentVersionId ?? ""
     syncEditors(detail.questions)
     await loadBanks(detail.id)
-    ElMessage.success("新题库版本已保存")
+    ElMessage.success("新场景任务版本已保存")
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "题库版本保存失败")
+    ElMessage.error(error instanceof Error ? error.message : "场景任务版本保存失败")
   } finally {
     saving.value = false
   }
@@ -380,17 +380,17 @@ async function publishVersion() {
   if (!selectedBank.value || !selectedVersionId.value || saving.value) return
   saving.value = true
   try {
-    await ElMessageBox.confirm("发布后该版本将不可直接修改，学生任务会绑定此版本。确定发布吗？", "发布题库版本", { type: "warning", confirmButtonText: "发布", cancelButtonText: "取消" })
+    await ElMessageBox.confirm("发布后该版本将不可直接修改，学生任务会绑定此版本。确定发布吗？", "发布场景任务版本", { type: "warning", confirmButtonText: "发布", cancelButtonText: "取消" })
     const detail = await api<QuestionBankDetail>(`/v1/education/question-banks/${selectedBank.value.id}/versions/${selectedVersionId.value}/publish`, { method: "POST" })
     selectedBank.value = detail
     selectedVersionId.value = detail.currentVersionId ?? selectedVersionId.value
     syncEditors(detail.questions)
     await loadBanks(detail.id)
-    ElMessage.success("题库版本已发布")
+    ElMessage.success("场景任务版本已发布")
     emit("published", detail.id)
   } catch (error) {
     if (error === "cancel" || error === "close") return
-    ElMessage.error(error instanceof Error ? error.message : "题库发布失败")
+    ElMessage.error(error instanceof Error ? error.message : "场景任务发布失败")
   } finally {
     saving.value = false
   }
@@ -399,15 +399,15 @@ async function publishVersion() {
 function toQuestionInput(editor: QuestionEditor, index: number): QuestionDefinitionInput {
   const options = editor.optionsText.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
     const separator = line.indexOf("|")
-    if (separator < 1) throw new Error(`第 ${index + 1} 道题选项格式应为“编号|内容”`)
+    if (separator < 1) throw new Error(`第 ${index + 1} 项任务选项格式应为“编号|内容”`)
     return { key: line.slice(0, separator).trim(), label: line.slice(separator + 1).trim() } satisfies QuestionOption
   })
   const correctAnswer = parseAnswer(editor.correctAnswerText, index)
   if (editor.type === "SIMULATION_EVIDENCE" && editor.ruleKind !== "METRIC_THRESHOLD") {
-    throw new Error(`第 ${index + 1} 道仿真证据题必须选择“仿真指标阈值”评分规则`)
+    throw new Error(`第 ${index + 1} 项仿真指标必须选择“仿真指标阈值”评分规则`)
   }
   if ((editor.type === "PLANNING" || editor.type === "SCHEDULE" || editor.type === "SCENARIO_DECISION") && editor.ruleKind === "EXACT" && correctAnswer === null) {
-    throw new Error(`第 ${index + 1} 道结构化题请配置“必填字段”评分规则，或填写结构化正确答案`)
+    throw new Error(`第 ${index + 1} 道结构化题请配置“必填字段”评分规则，或填写结构化判定参数`)
   }
   let gradingRule: QuestionGradingRule = { kind: "EXACT" }
   if (editor.ruleKind === "REQUIRED_FIELDS") gradingRule = { kind: "REQUIRED_FIELDS", fields: editor.requiredFieldsText.split(",").map((field) => field.trim()).filter(Boolean) }
@@ -421,7 +421,7 @@ function parseAnswer(value: string, index: number): QuestionAnswer {
   if (!input) return null
   if (input === "true" || input === "false") return input === "true"
   if (input.startsWith("[") || input.startsWith("{")) {
-    try { return JSON.parse(input) as QuestionAnswer } catch { throw new Error(`第 ${index + 1} 道题正确答案 JSON 格式无效`) }
+    try { return JSON.parse(input) as QuestionAnswer } catch { throw new Error(`第 ${index + 1} 项任务判定参数 JSON 格式无效`) }
   }
   return input
 }
@@ -432,11 +432,11 @@ function formatAnswer(value: QuestionAnswer): string {
 }
 
 function sceneLabel(sceneType: SceneType | null) {
-  return sceneOptions.find((item) => item.value === sceneType)?.label ?? "通用题库"
+  return sceneOptions.find((item) => item.value === sceneType)?.label ?? "通用场景任务"
 }
 
 function questionTypeLabel(type: QuestionType) {
-  return ({ SINGLE_CHOICE: "单选题", MULTIPLE_CHOICE: "多选题", TRUE_FALSE: "判断题", PLANNING: "规划题", SCHEDULE: "时刻表题", SCENARIO_DECISION: "场景决策题", SIMULATION_EVIDENCE: "仿真证据题" } as Record<QuestionType, string>)[type]
+  return ({ SINGLE_CHOICE: "方案选项", MULTIPLE_CHOICE: "方案多选", TRUE_FALSE: "条件判断", PLANNING: "航线规划", SCHEDULE: "运行时序", SCENARIO_DECISION: "场景决策", SIMULATION_EVIDENCE: "仿真结果" } as Record<QuestionType, string>)[type]
 }
 
 function difficultyLabel(value: QuestionDifficulty) {
@@ -451,26 +451,26 @@ function stageOptionsFor(stageCode: string) {
 <template>
   <div class="question-bank-page" v-loading="loading">
     <header class="question-bank-page-header">
-      <div><span class="eyebrow">QUESTION BANK</span><h1>题库管理</h1><p>把理论判断、方案规划和仿真证据放进同一套可追溯的教学评价。</p></div>
-      <div class="question-bank-actions"><el-button :icon="Refresh" @click="loadBanks()">刷新</el-button><el-button :icon="WarningFilled" @click="openAudit">版本审计</el-button><el-button type="primary" :icon="Plus" @click="showCreate = true">新建题库</el-button></div>
+      <div><span class="eyebrow">SCENARIO TASKS</span><h1>场景任务库</h1><p>配置场景需求、方案任务项和仿真指标规则。</p></div>
+      <div class="question-bank-actions"><el-button :icon="Refresh" @click="loadBanks()">刷新</el-button><el-button :icon="WarningFilled" @click="openAudit">版本检查</el-button><el-button type="primary" :icon="Plus" @click="showCreate = true">新建场景任务</el-button></div>
     </header>
     <div v-if="errorText" class="question-bank-error" role="alert"><strong>{{ errorText }}</strong><el-button native-type="button" text @click="loadBanks">重新加载</el-button></div>
     <div class="question-bank-layout">
       <aside class="question-bank-list">
-        <header><strong>我的题库</strong><span>{{ banks.length }}</span></header>
+        <header><strong>我的场景任务</strong><span>{{ banks.length }}</span></header>
         <div class="question-bank-filters">
-          <el-input v-model="searchText" clearable :prefix-icon="Search" aria-label="搜索题库名称或说明" placeholder="搜索题库名称或说明" />
-          <el-select v-model="sceneFilter" clearable aria-label="按适用场景筛选题库" placeholder="全部场景">
+          <el-input v-model="searchText" clearable :prefix-icon="Search" aria-label="搜索场景任务名称或说明" placeholder="搜索场景任务名称或说明" />
+          <el-select v-model="sceneFilter" clearable aria-label="按适用场景筛选场景任务" placeholder="全部场景">
             <el-option v-for="item in sceneFilterOptions" :key="item.value || 'ALL'" :label="item.label" :value="item.value" />
           </el-select>
-          <el-select v-model="questionTypeFilter" clearable aria-label="按题型筛选题库" placeholder="全部题型">
+          <el-select v-model="questionTypeFilter" clearable aria-label="按任务项类型筛选场景任务" placeholder="全部任务项类型">
             <el-option v-for="type in questionTypes" :key="type" :label="questionTypeLabel(type)" :value="type" />
           </el-select>
-          <el-select v-model="difficultyFilter" clearable aria-label="按难度筛选题库" placeholder="全部难度">
+          <el-select v-model="difficultyFilter" clearable aria-label="按难度筛选场景任务" placeholder="全部难度">
             <el-option v-for="difficulty in questionDifficulties" :key="difficulty" :label="difficultyLabel(difficulty)" :value="difficulty" />
           </el-select>
-          <el-input v-model="knowledgePointFilter" clearable aria-label="按知识点筛选题库" placeholder="筛选知识点" />
-          <el-select v-model="usageFilter" clearable aria-label="按任务使用状态筛选题库" placeholder="全部使用状态">
+          <el-input v-model="knowledgePointFilter" clearable aria-label="按知识点筛选场景任务" placeholder="筛选知识点" />
+          <el-select v-model="usageFilter" clearable aria-label="按任务使用状态筛选场景任务" placeholder="全部使用状态">
             <el-option label="已用于任务" value="USED" />
             <el-option label="尚未使用" value="UNUSED" />
           </el-select>
@@ -478,44 +478,44 @@ function stageOptionsFor(stageCode: string) {
         <button v-for="bank in banks" :key="bank.id" type="button" :class="{ active: bank.id === selectedBankId }" :aria-pressed="bank.id === selectedBankId" :aria-label="`${bank.title}，${sceneLabel(bank.sceneType)}，${bank.questionCount} 题${bank.id === selectedBankId ? '，已选中' : ''}`" @click="selectBank(bank.id)">
           <span class="bank-list-mark">{{ bank.title.slice(0, 1) }}</span><div><strong>{{ bank.title }}</strong><small>{{ sceneLabel(bank.sceneType) }} · V{{ bank.currentVersion }} · {{ bank.questionCount }} 题 · 已用于 {{ bank.usageCount }} 个任务</small></div>
         </button>
-        <div v-if="!banks.length && !errorText" class="question-bank-empty" role="status" aria-live="polite"><DocumentAdd /><strong>{{ hasBankFilters ? '没有匹配题库' : '还没有题库' }}</strong><span>{{ hasBankFilters ? '换一个关键词或场景筛选条件试试' : '创建一套题库开始编排题目' }}</span><el-button v-if="hasBankFilters" text @click="clearBankFilters">清除筛选</el-button></div>
+        <div v-if="!banks.length && !errorText" class="question-bank-empty" role="status" aria-live="polite"><DocumentAdd /><strong>{{ hasBankFilters ? '没有匹配场景任务' : '还没有场景任务' }}</strong><span>{{ hasBankFilters ? '换一个关键词或场景筛选条件试试' : '创建场景任务并配置任务项' }}</span><el-button v-if="hasBankFilters" text @click="clearBankFilters">清除筛选</el-button></div>
       </aside>
       <main v-if="selectedBank" class="question-bank-editor">
-        <div v-if="detailError" class="question-bank-detail-error" role="alert" aria-live="assertive"><span><strong>题库详情同步失败</strong><small>{{ detailError }}</small><p>当前已保留上一次可用的题目内容，保存或发布前请重新加载详情。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" @click="selectBank(selectedBankId)">重试详情</el-button></div>
+        <div v-if="detailError" class="question-bank-detail-error" role="alert" aria-live="assertive"><span><strong>场景任务详情同步失败</strong><small>{{ detailError }}</small><p>当前已保留上一次可用的任务项内容，保存或发布前请重新加载详情。</p></span><el-button type="warning" :icon="Refresh" :loading="loading" @click="selectBank(selectedBankId)">重试详情</el-button></div>
         <header class="editor-header"><div><span class="eyebrow">{{ sceneLabel(selectedBank.sceneType) }}</span><h2>{{ selectedBank.title }}</h2><p>{{ selectedBank.summary }}</p></div><div class="editor-status"><span :class="isPublished ? 'status-published' : 'status-draft'">{{ isPublished ? '已发布版本' : '草稿版本' }}</span><strong>{{ editors.length }} 题</strong></div></header>
-        <section class="version-toolbar"><label>编辑版本<select v-model="selectedVersionId" aria-label="选择题库编辑版本" @change="selectVersion(selectedVersionId)"><option v-for="version in selectedBank.versions" :key="version.id" :value="version.id">V{{ version.version }} · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.questionCount }} 题</option></select></label><small v-if="selectedVersion">{{ selectedVersion.changeNote || '暂无版本说明' }}</small></section>
+        <section class="version-toolbar"><label>编辑版本<select v-model="selectedVersionId" aria-label="选择场景任务编辑版本" @change="selectVersion(selectedVersionId)"><option v-for="version in selectedBank.versions" :key="version.id" :value="version.id">V{{ version.version }} · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.questionCount }} 项</option></select></label><small v-if="selectedVersion">{{ selectedVersion.changeNote || '暂无版本说明' }}</small></section>
         <div v-if="isPublished" class="editor-notice" role="status" aria-live="polite"><Check /><span>已发布版本不可直接修改。如需调整，请先创建新版本。</span></div>
         <section class="question-list">
           <article v-for="(question, index) in editors" :key="`${question.code}-${index}`" class="question-editor-card">
-            <header><div><span>题目 {{ String(index + 1).padStart(2, '0') }}</span><strong>{{ questionTypeLabel(question.type) }}</strong></div><el-button v-if="!isPublished" native-type="button" text type="danger" :aria-label="`删除第 ${index + 1} 道题`" @click="removeQuestion(index)">删除</el-button></header>
-            <div class="question-editor-grid"><el-form-item label="题目编号"><el-input v-model="question.code" :disabled="isPublished" /></el-form-item><el-form-item label="题型"><el-select v-model="question.type" :disabled="isPublished"><el-option v-for="type in questionTypes" :key="type" :label="questionTypeLabel(type)" :value="type" /></el-select></el-form-item><el-form-item label="难度"><el-select v-model="question.difficulty" :disabled="isPublished"><el-option v-for="difficulty in questionDifficulties" :key="difficulty" :label="difficultyLabel(difficulty)" :value="difficulty" /></el-select></el-form-item><el-form-item label="知识点"><el-input v-model="question.knowledgePointsText" placeholder="飞行安全，时刻规划" :disabled="isPublished" /></el-form-item><el-form-item label="分值"><el-input-number v-model="question.maxScore" :min="0.1" :max="1000" :precision="2" :disabled="isPublished" /></el-form-item><el-form-item label="所属阶段"><el-select v-model="question.stageCode" clearable placeholder="通用 / 不指定阶段" :disabled="isPublished"><el-option v-for="stage in stageOptionsFor(question.stageCode)" :key="stage.value || 'GENERAL'" :label="stage.label" :value="stage.value" /></el-select></el-form-item></div>
-            <el-form-item label="题干"><el-input v-model="question.prompt" type="textarea" :rows="2" :disabled="isPublished" /></el-form-item>
-            <div class="question-editor-grid"><el-form-item label="选项"><el-input v-model="question.optionsText" type="textarea" :rows="3" placeholder="每行一个，格式：A|选项内容" :disabled="isPublished" /></el-form-item><el-form-item label="正确答案"><el-input v-model="question.correctAnswerText" type="textarea" :rows="3" placeholder="字符串直接填写；数组或对象使用 JSON" :disabled="isPublished" /></el-form-item></div>
+            <header><div><span>任务项 {{ String(index + 1).padStart(2, '0') }}</span><strong>{{ questionTypeLabel(question.type) }}</strong></div><el-button v-if="!isPublished" native-type="button" text type="danger" :aria-label="`删除第 ${index + 1} 项任务`" @click="removeQuestion(index)">删除</el-button></header>
+            <div class="question-editor-grid"><el-form-item label="任务项编号"><el-input v-model="question.code" :disabled="isPublished" /></el-form-item><el-form-item label="任务项类型"><el-select v-model="question.type" :disabled="isPublished"><el-option v-for="type in questionTypes" :key="type" :label="questionTypeLabel(type)" :value="type" /></el-select></el-form-item><el-form-item label="难度"><el-select v-model="question.difficulty" :disabled="isPublished"><el-option v-for="difficulty in questionDifficulties" :key="difficulty" :label="difficultyLabel(difficulty)" :value="difficulty" /></el-select></el-form-item><el-form-item label="知识点"><el-input v-model="question.knowledgePointsText" placeholder="飞行安全，时刻规划" :disabled="isPublished" /></el-form-item><el-form-item label="分值"><el-input-number v-model="question.maxScore" :min="0.1" :max="1000" :precision="2" :disabled="isPublished" /></el-form-item><el-form-item label="所属阶段"><el-select v-model="question.stageCode" clearable placeholder="通用 / 不指定阶段" :disabled="isPublished"><el-option v-for="stage in stageOptionsFor(question.stageCode)" :key="stage.value || 'GENERAL'" :label="stage.label" :value="stage.value" /></el-select></el-form-item></div>
+            <el-form-item label="任务要求"><el-input v-model="question.prompt" type="textarea" :rows="2" :disabled="isPublished" /></el-form-item>
+            <div class="question-editor-grid"><el-form-item label="选项"><el-input v-model="question.optionsText" type="textarea" :rows="3" placeholder="每行一个，格式：A|选项内容" :disabled="isPublished" /></el-form-item><el-form-item label="判定参数"><el-input v-model="question.correctAnswerText" type="textarea" :rows="3" placeholder="指标阈值由评分规则计算；结构化参数使用 JSON" :disabled="isPublished" /></el-form-item></div>
             <div class="question-editor-grid"><el-form-item label="评分规则"><el-select v-model="question.ruleKind" :disabled="isPublished"><el-option label="精确匹配" value="EXACT" /><el-option label="必填字段" value="REQUIRED_FIELDS" /><el-option label="仿真指标阈值" value="METRIC_THRESHOLD" /></el-select></el-form-item><el-form-item label="解析"><el-input v-model="question.explanation" :disabled="isPublished" /></el-form-item></div>
             <div v-if="question.ruleKind === 'REQUIRED_FIELDS'" class="rule-row"><el-form-item label="必填字段"><el-input v-model="question.requiredFieldsText" placeholder="用逗号分隔，如 routePlan,safetyCheck" :disabled="isPublished" /></el-form-item></div>
             <div v-if="question.ruleKind === 'METRIC_THRESHOLD'" class="rule-row"><el-form-item label="指标代码"><el-input v-model="question.metricCode" placeholder="如 ON_TIME_DELIVERY" :disabled="isPublished" /></el-form-item><el-form-item label="比较"><el-select v-model="question.metricOperator" :disabled="isPublished"><el-option label=">=" value="GTE" /><el-option label="<=" value="LTE" /><el-option label="=" value="EQ" /></el-select></el-form-item><el-form-item label="阈值"><el-input-number v-model="question.threshold" :disabled="isPublished" /></el-form-item></div>
           </article>
         </section>
-        <footer class="editor-footer" v-if="!isPublished"><el-button native-type="button" text :icon="Plus" @click="addQuestion">添加题目</el-button><div><el-input v-model="versionNote" aria-label="新题库版本说明" placeholder="本次版本说明（可选）" /><el-button native-type="button" :icon="Upload" @click="saveVersion" :loading="saving">保存新版本</el-button><el-button native-type="button" type="primary" :icon="Check" @click="publishVersion" :loading="saving" :disabled="!selectedVersionId || editors.length === 0 || hasUnsavedChanges" :title="hasUnsavedChanges ? '请先保存修改，再发布当前版本' : '发布当前版本'">发布当前版本</el-button></div><small v-if="hasUnsavedChanges" class="editor-unsaved-hint" role="status" aria-live="polite">有未保存修改，请先保存新版本，再发布给学生。</small></footer>
+        <footer class="editor-footer" v-if="!isPublished"><el-button native-type="button" text :icon="Plus" @click="addQuestion">添加任务项</el-button><div><el-input v-model="versionNote" aria-label="新场景任务版本说明" placeholder="本次版本说明（可选）" /><el-button native-type="button" :icon="Upload" @click="saveVersion" :loading="saving">保存新版本</el-button><el-button native-type="button" type="primary" :icon="Check" @click="publishVersion" :loading="saving" :disabled="!selectedVersionId || editors.length === 0 || hasUnsavedChanges" :title="hasUnsavedChanges ? '请先保存修改，再发布当前版本' : '发布当前版本'">发布当前版本</el-button></div><small v-if="hasUnsavedChanges" class="editor-unsaved-hint" role="status" aria-live="polite">有未保存修改，请先保存新版本，再发布给学生。</small></footer>
         <footer v-else class="editor-footer"><el-button native-type="button" type="primary" :icon="Plus" @click="saveVersion">创建可编辑新版本</el-button></footer>
       </main>
-      <main v-else class="question-bank-no-selection"><DocumentAdd /><h2>选择一个题库</h2><p>从左侧选择题库，或创建一套新的教学题库。</p><el-button type="primary" :icon="Plus" @click="showCreate = true">新建题库</el-button></main>
+      <main v-else class="question-bank-no-selection"><DocumentAdd /><h2>选择一个场景任务</h2><p>从左侧选择场景任务，或创建一套新的场景任务。</p><el-button type="primary" :icon="Plus" @click="showCreate = true">新建场景任务</el-button></main>
     </div>
-    <el-dialog v-model="showAudit" title="题库版本审计" width="min(920px, calc(100vw - 32px))" class="question-bank-audit-dialog">
+    <el-dialog v-model="showAudit" title="任务版本检查" width="min(920px, calc(100vw - 32px))" class="question-bank-audit-dialog">
       <div v-loading="auditLoading" class="audit-content">
         <div v-if="auditError" class="question-bank-error" role="alert"><strong>{{ auditError }}</strong><el-button native-type="button" text @click="loadAudit">重新加载</el-button></div>
         <template v-if="audit">
-          <div class="audit-summary" aria-label="题库审计汇总"><div><strong>{{ audit.summary.versionCount }}</strong><span>使用中版本</span></div><div class="audit-summary-good"><strong>{{ audit.summary.validVersionCount }}</strong><span>可执行</span></div><div class="audit-summary-bad"><strong>{{ audit.summary.invalidVersionCount }}</strong><span>待处理</span></div><div class="audit-summary-draft"><strong>{{ audit.summary.emptyDraftCount }}</strong><span>空草稿</span></div><div class="audit-summary-archived"><strong>{{ audit.summary.archivedVersionCount }}</strong><span>已归档</span></div></div>
-          <section v-loading="cleanupPreviewLoading" class="cleanup-preview" aria-label="历史空草稿治理预览"><div><strong>历史空草稿治理预览</strong><small>先确认影响范围，再批量归档已确认安全的空草稿；不会删除数据</small></div><div class="cleanup-preview-stats"><span><b>{{ cleanupPreview?.summary.candidateCount ?? 0 }}</b>可归档</span><span><b>{{ cleanupPreview?.summary.blockedReferenceCount ?? 0 }}</b>被任务引用</span><span><b>{{ cleanupPreview?.summary.bankCount ?? 0 }}</b>个题库</span><el-button size="small" type="warning" :loading="cleanupBatchLoading" :disabled="!selectedCleanupVersionIds.length" @click="archiveSelectedEmptyDrafts">批量归档已选 {{ selectedCleanupVersionIds.length }}</el-button></div><div v-if="cleanupPreview?.banks.length" class="cleanup-preview-banks"><span v-for="bank in cleanupPreview.banks" :key="bank.bankId"><b>{{ bank.bankTitle }}</b><small>{{ bank.candidateCount }} 可归档 · {{ bank.blockedReferenceCount }} 项阻断</small><template v-for="version in bank.versions" :key="version.versionId"><label v-if="version.action === 'ARCHIVE'" class="cleanup-version-choice"><input v-model="selectedCleanupVersionIds" type="checkbox" :value="version.versionId" :aria-label="`${bank.bankTitle} V${version.version} 空草稿`">V{{ version.version }}</label></template></span></div><p v-else class="cleanup-preview-empty">当前没有可治理的空草稿。</p></section>
-          <div class="audit-toolbar"><p class="audit-help">审计检查版本是否具备可判分内容。空草稿可安全归档，不会物理删除；已发布、有题目或已被任务引用的版本不能归档。</p><el-radio-group v-model="auditScope" size="small" aria-label="题库审计结果范围"><el-radio-button value="ISSUES">待处理 {{ audit.summary.invalidVersionCount }}</el-radio-button><el-radio-button value="ALL">全部版本 {{ audit.summary.versionCount }}</el-radio-button><el-radio-button value="ARCHIVED">已归档 {{ audit.summary.archivedVersionCount }}</el-radio-button></el-radio-group></div>
-          <div v-if="!audit.versions.length" class="question-bank-empty" role="status" aria-live="polite"><CircleCheck /><strong>暂无题库版本</strong><span>创建题库后可在这里检查版本是否可发布。</span></div>
-          <div v-else-if="visibleAuditVersions.length" class="audit-table" role="table" aria-label="题库版本审计结果"><div class="audit-row audit-row-head" role="row"><span>题库 / 版本</span><span>题型与题数</span><span>仿真指标</span><span>状态</span><span>问题</span><span>操作</span></div><div v-for="item in visibleAuditVersions" :key="item.versionId" class="audit-row" :class="[auditStatusClass(item), { 'audit-row-interactive': item.status !== 'ARCHIVED' }]" role="row" :tabindex="item.status === 'ARCHIVED' ? -1 : 0" @click="openAuditVersion(item)" @keydown.enter.self="openAuditVersion(item)" @keydown.space.self.prevent="openAuditVersion(item)"><span data-label="题库 / 版本"><strong>{{ item.bankTitle }}</strong><small>V{{ item.version }} · {{ auditVersionStatusLabel(item) }}</small></span><span data-label="题型与题数">{{ item.questionCount }} 题 · {{ item.questionTypes.map(questionTypeLabel).join('、') || '未配置题型' }}</span><span data-label="仿真指标">{{ item.metricCodes.join('、') || '无' }}</span><span data-label="状态"><CircleCheck v-if="item.valid" /><WarningFilled v-else /> {{ item.status === 'ARCHIVED' ? '已归档' : item.valid ? '可执行' : '待处理' }}</span><span data-label="问题">{{ item.status === 'ARCHIVED' ? '保留审计记录' : auditIssueLabel(item.issueCategory) }}<small v-for="issue in item.issues" :key="issue">{{ issue }}</small></span><span class="audit-row-action" data-label="操作"><el-button v-if="item.issueCategory === 'EMPTY_DRAFT' && item.status === 'DRAFT'" native-type="button" text type="warning" :icon="FolderDelete" :loading="archivingVersionId === item.versionId" @click.stop="archiveEmptyDraft(item)">归档</el-button><small v-else>{{ item.status === 'ARCHIVED' ? '只读' : '打开' }}</small></span></div></div>
-          <div v-else class="audit-empty-filter" role="status"><CircleCheck /><strong>{{ auditScope === 'ARCHIVED' ? '暂无已归档版本' : auditScope === 'ALL' ? '暂无使用中版本' : '没有待处理版本' }}</strong><span>{{ auditScope === 'ARCHIVED' ? '归档的空草稿会保留在这里，便于审计追溯。' : auditScope === 'ALL' ? '创建题库后可在这里查看版本明细。' : '当前所有使用中版本均具备可执行内容，可切换到“全部版本”查看明细。' }}</span></div>
+          <div class="audit-summary" aria-label="任务版本检查汇总"><div><strong>{{ audit.summary.versionCount }}</strong><span>使用中版本</span></div><div class="audit-summary-good"><strong>{{ audit.summary.validVersionCount }}</strong><span>可执行</span></div><div class="audit-summary-bad"><strong>{{ audit.summary.invalidVersionCount }}</strong><span>待处理</span></div><div class="audit-summary-draft"><strong>{{ audit.summary.emptyDraftCount }}</strong><span>空草稿</span></div><div class="audit-summary-archived"><strong>{{ audit.summary.archivedVersionCount }}</strong><span>已归档</span></div></div>
+          <section v-loading="cleanupPreviewLoading" class="cleanup-preview" aria-label="历史空草稿治理预览"><div><strong>历史空草稿治理预览</strong><small>先确认影响范围，再批量归档已确认安全的空草稿；不会删除数据</small></div><div class="cleanup-preview-stats"><span><b>{{ cleanupPreview?.summary.candidateCount ?? 0 }}</b>可归档</span><span><b>{{ cleanupPreview?.summary.blockedReferenceCount ?? 0 }}</b>被任务引用</span><span><b>{{ cleanupPreview?.summary.bankCount ?? 0 }}</b>个场景任务</span><el-button size="small" type="warning" :loading="cleanupBatchLoading" :disabled="!selectedCleanupVersionIds.length" @click="archiveSelectedEmptyDrafts">批量归档已选 {{ selectedCleanupVersionIds.length }}</el-button></div><div v-if="cleanupPreview?.banks.length" class="cleanup-preview-banks"><span v-for="bank in cleanupPreview.banks" :key="bank.bankId"><b>{{ bank.bankTitle }}</b><small>{{ bank.candidateCount }} 可归档 · {{ bank.blockedReferenceCount }} 项阻断</small><template v-for="version in bank.versions" :key="version.versionId"><label v-if="version.action === 'ARCHIVE'" class="cleanup-version-choice"><input v-model="selectedCleanupVersionIds" type="checkbox" :value="version.versionId" :aria-label="`${bank.bankTitle} V${version.version} 空草稿`">V{{ version.version }}</label></template></span></div><p v-else class="cleanup-preview-empty">当前没有可治理的空草稿。</p></section>
+          <div class="audit-toolbar"><p class="audit-help">检查版本是否具备可判分内容。空草稿可安全归档，不会物理删除；已发布、有任务项或已被任务引用的版本不能归档。</p><el-radio-group v-model="auditScope" size="small" aria-label="任务版本检查范围"><el-radio-button value="ISSUES">待处理 {{ audit.summary.invalidVersionCount }}</el-radio-button><el-radio-button value="ALL">全部版本 {{ audit.summary.versionCount }}</el-radio-button><el-radio-button value="ARCHIVED">已归档 {{ audit.summary.archivedVersionCount }}</el-radio-button></el-radio-group></div>
+          <div v-if="!audit.versions.length" class="question-bank-empty" role="status" aria-live="polite"><CircleCheck /><strong>暂无场景任务版本</strong><span>创建场景任务后可在这里检查版本是否可发布。</span></div>
+          <div v-else-if="visibleAuditVersions.length" class="audit-table" role="table" aria-label="任务版本检查结果"><div class="audit-row audit-row-head" role="row"><span>场景任务 / 版本</span><span>任务项类型与数量</span><span>仿真指标</span><span>状态</span><span>问题</span><span>操作</span></div><div v-for="item in visibleAuditVersions" :key="item.versionId" class="audit-row" :class="[auditStatusClass(item), { 'audit-row-interactive': item.status !== 'ARCHIVED' }]" role="row" :tabindex="item.status === 'ARCHIVED' ? -1 : 0" @click="openAuditVersion(item)" @keydown.enter.self="openAuditVersion(item)" @keydown.space.self.prevent="openAuditVersion(item)"><span data-label="场景任务 / 版本"><strong>{{ item.bankTitle }}</strong><small>V{{ item.version }} · {{ auditVersionStatusLabel(item) }}</small></span><span data-label="任务项类型与数量">{{ item.questionCount }} 项 · {{ item.questionTypes.map(questionTypeLabel).join('、') || '未配置任务项' }}</span><span data-label="仿真指标">{{ item.metricCodes.join('、') || '无' }}</span><span data-label="状态"><CircleCheck v-if="item.valid" /><WarningFilled v-else /> {{ item.status === 'ARCHIVED' ? '已归档' : item.valid ? '可执行' : '待处理' }}</span><span data-label="问题">{{ item.status === 'ARCHIVED' ? '保留版本检查记录' : auditIssueLabel(item.issueCategory) }}<small v-for="issue in item.issues" :key="issue">{{ issue }}</small></span><span class="audit-row-action" data-label="操作"><el-button v-if="item.issueCategory === 'EMPTY_DRAFT' && item.status === 'DRAFT'" native-type="button" text type="warning" :icon="FolderDelete" :loading="archivingVersionId === item.versionId" @click.stop="archiveEmptyDraft(item)">归档</el-button><small v-else>{{ item.status === 'ARCHIVED' ? '只读' : '打开' }}</small></span></div></div>
+          <div v-else class="audit-empty-filter" role="status"><CircleCheck /><strong>{{ auditScope === 'ARCHIVED' ? '暂无已归档版本' : auditScope === 'ALL' ? '暂无使用中版本' : '没有待处理版本' }}</strong><span>{{ auditScope === 'ARCHIVED' ? '归档的空草稿会保留在这里，便于查看版本记录。' : auditScope === 'ALL' ? '创建场景任务后可在这里查看版本明细。' : '当前所有使用中版本均具备可执行内容，可切换到“全部版本”查看明细。' }}</span></div>
         </template>
       </div>
-      <template #footer><el-button :icon="Refresh" :loading="auditLoading" @click="loadAudit">刷新审计</el-button><el-button type="primary" @click="showAudit = false">关闭</el-button></template>
+      <template #footer><el-button :icon="Refresh" :loading="auditLoading" @click="loadAudit">刷新检查</el-button><el-button type="primary" @click="showAudit = false">关闭</el-button></template>
     </el-dialog>
-    <el-dialog v-model="showCreate" title="新建题库" width="min(520px, calc(100vw - 32px))"><el-form label-position="top"><el-form-item label="题库名称"><el-input v-model="createForm.title" maxlength="160" show-word-limit /></el-form-item><el-form-item label="适用场景"><el-select v-model="createForm.sceneType" placeholder="可选"><el-option v-for="item in sceneOptions" :key="String(item.value)" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="题库说明"><el-input v-model="createForm.summary" type="textarea" :rows="3" maxlength="2000" show-word-limit /></el-form-item></el-form><template #footer><el-button @click="showCreate = false">取消</el-button><el-button type="primary" :loading="saving" @click="createBank">创建</el-button></template></el-dialog>
+    <el-dialog v-model="showCreate" title="新建场景任务" width="min(520px, calc(100vw - 32px))"><el-form label-position="top"><el-form-item label="场景任务名称"><el-input v-model="createForm.title" maxlength="160" show-word-limit /></el-form-item><el-form-item label="适用场景"><el-select v-model="createForm.sceneType" placeholder="可选"><el-option v-for="item in sceneOptions" :key="String(item.value)" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="场景任务说明"><el-input v-model="createForm.summary" type="textarea" :rows="3" maxlength="2000" show-word-limit /></el-form-item></el-form><template #footer><el-button @click="showCreate = false">取消</el-button><el-button type="primary" :loading="saving" @click="createBank">创建</el-button></template></el-dialog>
   </div>
 </template>
 

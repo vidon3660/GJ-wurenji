@@ -86,7 +86,7 @@ export function formatSubmissionStatus(value: string | null | undefined): string
     VALIDATED: "已验证",
     DRAFT: "草稿",
     PENDING: "等待处理",
-    REVIEWED: "教师已复核",
+    REVIEWED: "教师已评分",
     PUBLISHED: "已发布",
     GRADED: "自动判定已完成"
   }
@@ -125,7 +125,7 @@ export function formatVtlTaskType(value: string | null | undefined): string {
 }
 
 export function formatEvaluationStatus(value: string | null | undefined): string {
-  return ({ PENDING: "待教师评价", REVIEWED: "教师已复核", PUBLISHED: "评价已发布" } as Record<string, string>)[value ?? ""] ?? "评价状态未指定"
+  return ({ PENDING: "待教师评价", REVIEWED: "教师已评分", PUBLISHED: "评价已发布" } as Record<string, string>)[value ?? ""] ?? "评价状态未指定"
 }
 
 export function formatReportJobStatus(value: string | null | undefined): string {

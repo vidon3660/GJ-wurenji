@@ -16,7 +16,7 @@ const emit = defineEmits<{ retry: [] }>()
     <el-button type="primary" :loading="props.loading" :icon="Refresh" @click="emit('retry')">重新加载项目</el-button>
   </section>
   <section v-else-if="props.state === 'ERROR' && props.hasProject" class="v3-project-sync-warning" role="alert" aria-live="assertive">
-    <div><strong>项目状态同步失败</strong><span>页面保留最近一次已加载内容；重新连接后会刷新阶段、活动和题库状态。</span></div>
+    <div><strong>项目状态同步失败</strong><span>页面保留最近一次已加载内容；重新连接后会刷新阶段、活动和场景任务状态。</span></div>
     <el-button size="small" type="warning" :loading="props.loading" :icon="Refresh" aria-label="重新连接并刷新项目状态" @click="emit('retry')">重新连接</el-button>
   </section>
 </template>

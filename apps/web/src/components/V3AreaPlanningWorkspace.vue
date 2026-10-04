@@ -421,7 +421,7 @@ async function submitPlan() {
   if (!workspace.value || workspace.value.draft.revision === 0) return
   try {
     await ElMessageBox.confirm(
-      "提交后系统将生成不可变区域规划图并进入教师审核，当前草稿在退回前不可继续编辑。",
+      "提交后系统将生成不可变区域规划图并进入教师确认，当前草稿在退回前不可继续编辑。",
       "确认提交区域规划",
       { confirmButtonText: "确认提交", cancelButtonText: "继续修改", type: "warning" }
     )
@@ -480,7 +480,7 @@ async function review(target: "accept" | "return") {
     emit("projectUpdated", result.project)
     ElMessage.success(target === "accept" ? "区域规划已通过" : "区域规划已退回学生修改")
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "区域规划审核失败")
+    ElMessage.error(error instanceof Error ? error.message : "区域规划确认失败")
   } finally {
     loading.value = false
   }
@@ -542,7 +542,7 @@ function firstMissingType(): ShowAreaFeatureType | null {
 }
 
 function statusLabel(status: ShowAreaPlanVersionView["status"]) {
-  return ({ SNAPSHOT: "手动快照", GENERATING: "生成中", GENERATION_FAILED: "生成失败", SUBMITTED: "待审核", RETURNED: "已退回", ACCEPTED: "已通过" } as const)[status]
+  return ({ SNAPSHOT: "手动快照", GENERATING: "生成中", GENERATION_FAILED: "生成失败", SUBMITTED: "待教师确认", RETURNED: "已退回", ACCEPTED: "已通过" } as const)[status]
 }
 
 function defaultHeightRange(type: ShowAreaFeatureType): Pick<ShowAreaFeatureInput, "heightRange"> | Record<string, never> {
@@ -742,7 +742,7 @@ function formatDistance(value: number) {
         <section class="area-spatial-relations">
           <header><strong>位置关系提示</strong><small>系统提供测量与重叠提示，合理性由教师判断</small></header>
           <ul v-if="spatialRelationRows.length"><li v-for="relation in spatialRelationRows" :key="relation.key" :class="relation.severity.toLowerCase()">{{ relation.label }}</li></ul>
-          <p v-else>历史版本未保存结构化位置关系，可结合地图与权威检查提示审核。</p>
+          <p v-else>历史版本未保存结构化位置关系，可结合地图与规则检查提示确认。</p>
         </section>
       </section>
 
@@ -787,7 +787,7 @@ function formatDistance(value: number) {
       </section>
 
       <section v-if="checkResult" class="area-check-results">
-        <header><strong>权威检查</strong><em :class="{ passed: checkResult.passed }">{{ checkResult.passed ? '门禁通过' : '存在阻断' }}</em></header>
+        <header><strong>系统规则检查</strong><em :class="{ passed: checkResult.passed }">{{ checkResult.passed ? '门禁通过' : '存在阻断' }}</em></header>
         <div v-if="checkResult.evidence.length === 0" class="empty-evidence"><el-icon><CircleCheck /></el-icon><span>未发现几何或完整性问题</span></div>
         <button v-for="item in checkResult.evidence" :key="`${item.code}:${item.featureIds.join('-')}`" type="button" :class="item.severity.toLowerCase()" @click="item.featureIds[0] && (selectedFeatureId = item.featureIds[0])">
           <el-icon><Warning /></el-icon><span><strong>{{ item.severity }}</strong><small>{{ item.message }}</small></span>
@@ -803,8 +803,8 @@ function formatDistance(value: number) {
       </section>
 
       <section v-if="!isStudent && latestSubmittedVersion" class="area-review-panel">
-        <header><strong>教师审核</strong><small>V{{ latestSubmittedVersion.versionNo }}</small></header>
-        <el-input v-model="reviewComment" type="textarea" :rows="3" maxlength="2000" placeholder="审核批注与修改要求" />
+        <header><strong>教师确认</strong><small>V{{ latestSubmittedVersion.versionNo }}</small></header>
+        <el-input v-model="reviewComment" type="textarea" :rows="3" maxlength="2000" placeholder="确认意见与修改要求" />
         <label><span>分数</span><el-input-number v-model="reviewScore" :min="0" :max="100" :step="1" placeholder="可选" /></label>
         <div><el-button @click="review('return')">退回修改</el-button><el-button type="primary" @click="review('accept')">通过规划</el-button></div>
       </section>

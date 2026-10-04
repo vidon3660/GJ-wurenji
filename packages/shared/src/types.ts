@@ -26,6 +26,14 @@ export interface AircraftSpec {
   maxAltitudeMeters: number
   maxRangeMeters: number
   maxPayloadKg: number
+  /** Optional energy model used by the route simulator. Kept optional for legacy scenes. */
+  batteryCapacityWh?: number
+  /** Battery ageing factor applied to usable capacity. */
+  batteryDegradationRatio?: number
+  /** Fraction of battery that must remain on landing (0..1). */
+  reserveEnergyRatio?: number
+  /** Usable energy consumed per metre of flight. */
+  energyConsumptionWhPerMeter?: number
 }
 
 export interface WindConfig {
@@ -46,6 +54,8 @@ export interface SimulationRules {
   maximumDurationSeconds: number
   minimumAltitudeMeters: number
   maximumAltitudeMeters: number
+  /** Required clearance above the terrain profile during airborne segments. */
+  minimumTerrainClearanceMeters?: number
 }
 
 export interface GeoPolygon {
@@ -66,6 +76,16 @@ export interface BoxObstacle {
   widthMeters: number
   lengthMeters: number
   heightMeters: number
+  /** Optional footprint rotation in the local horizontal plane. */
+  headingDegrees?: number
+}
+
+export interface ChargingStation {
+  id: string
+  name: string
+  position: GeoPoint
+  chargeRateWhPerSecond: number
+  batterySwapSeconds?: number
 }
 
 export interface TaskPoint {
@@ -88,6 +108,7 @@ export interface PracticeScene {
   landingPoint: GeoPoint
   noFlyZones: NoFlyZone[]
   obstacles: BoxObstacle[]
+  chargingStations?: ChargingStation[]
   taskPoints: TaskPoint[]
   environment: EnvironmentConfig
   rules: SimulationRules
@@ -107,6 +128,13 @@ export interface DronePlan {
   assignedTaskIds: string[]
   takeoffDelaySeconds: number
   waypoints: Waypoint[]
+  /** Energy service at a charging station. The waypoint must be colocated with the station. */
+  energyStops?: Array<{
+    waypointId: string
+    stationId: string
+    mode: "CHARGE" | "SWAP"
+    durationSeconds?: number
+  }>
 }
 
 export interface MissionPlan {
@@ -131,6 +159,8 @@ export interface DroneTrackSample {
   speedMps: number
   distanceMeters: number
   status: "WAITING" | "FLYING" | "COMPLETED"
+  batteryPercent?: number
+  energyRemainingWh?: number
 }
 
 export interface DroneTrack {
@@ -152,6 +182,9 @@ export interface RuleFinding {
     | "RANGE_EXCEEDED"
     | "PERFORMANCE_LIMIT"
     | "PAYLOAD_EXCEEDED"
+    | "GROUND_CLEARANCE"
+    | "ENERGY_INSUFFICIENT"
+    | "ENERGY_STOP_INVALID"
   severity: Severity
   title: string
   message: string
@@ -174,6 +207,13 @@ export interface SimulationSummary {
   durationSeconds: number
   errorCount: number
   warningCount: number
+  totalEnergyConsumedWh: number
+  minimumRemainingEnergyWh: number | null
+  energyDepletionCount: number
+  groundRiskCount: number
+  obstacleCollisionCount: number
+  airborneConflictCount: number
+  executable: boolean
 }
 
 export interface SimulationResult {

@@ -11,7 +11,7 @@ export interface LogisticsEventBriefing {
 
 export function logisticsEventBriefing(event: LogisticsRuntimeEventView, recommendedAction: string): LogisticsEventBriefing {
   const role = runtimeEventSource("CITY_LOGISTICS", event.category, event.code)
-  const objective = objectives[event.category] ?? "核实运行影响，选择有效动作控制风险并保持配送过程可追溯。"
+  const objective = objectives[event.category] ?? "核实运行影响，选择有效动作控制风险并保持配送记录完整。"
   return {
     role,
     request: event.detail,

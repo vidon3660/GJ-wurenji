@@ -126,7 +126,7 @@ async function load() {
     applyWorkspace(value)
     await loadReviewFacts()
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : "复盘评价加载失败"
+    loadError.value = error instanceof Error ? error.message : "运行评估加载失败"
     ElMessage.error(loadError.value)
   } finally {
     loading.value = false
@@ -349,7 +349,7 @@ function runtimeEvidenceLabel(item: ShowReplayTimelineItemView) {
 <template>
   <section class="show-review-workspace" v-loading="loading">
     <header class="review-commandbar">
-      <div><span>{{ isLogistics ? 'DELIVERY REVIEW' : 'POST-FLIGHT REVIEW' }}</span><h2>{{ isLogistics ? '物流复盘评价' : '复盘评价' }}</h2><p>{{ workspace?.actor === 'TEACHER' ? '运行证据、量表核定与单文件报告' : isLogistics ? '回放配送运行并完成复盘总结' : '回放运行过程并完成飞后总结' }}</p></div>
+      <div><span>{{ isLogistics ? 'DELIVERY ASSESSMENT' : 'POST-FLIGHT ASSESSMENT' }}</span><h2>{{ isLogistics ? '物流运行评估' : '运行评估' }}</h2><p>{{ workspace?.actor === 'TEACHER' ? '运行指标、评分量表与成果文件' : isLogistics ? '回放配送运行并完成运行总结' : '回放运行过程并完成飞后总结' }}</p></div>
       <div class="review-commandbar-actions">
         <span class="review-status" :class="workspace?.evaluation.status.toLowerCase()"><i />{{ workspace?.evaluation.status === 'PENDING' && !workspace?.evaluation.studentSubmittedAt ? '总结待提交' : formatEvaluationStatus(workspace?.evaluation.status) }}</span>
         <el-button :icon="Refresh" circle title="刷新" @click="load" />
@@ -362,35 +362,35 @@ function runtimeEvidenceLabel(item: ShowReplayTimelineItemView) {
     </div>
 
     <div v-if="loadError && !workspace" class="review-load-error review-load-error-full" role="alert" aria-live="assertive">
-      <span><strong>复盘评价加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的复盘数据，请检查连接后重新加载。</p></span>
-      <el-button type="primary" :icon="Refresh" :loading="loading" @click="load">重新加载复盘</el-button>
+      <span><strong>运行评估加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的评估数据，请检查连接后重新加载。</p></span>
+      <el-button type="primary" :icon="Refresh" :loading="loading" @click="load">重新加载评估</el-button>
     </div>
 
     <main v-if="workspace" class="review-main">
       <div v-if="loadError" class="review-load-error" role="alert" aria-live="assertive">
-        <span><strong>复盘数据同步失败</strong><small>{{ loadError }}</small><p>当前页面数据已保留，可继续查看；重新加载成功后再保存或发布评价。</p></span>
+        <span><strong>评估数据同步失败</strong><small>{{ loadError }}</small><p>当前页面数据已保留，可继续查看；重新加载成功后再保存或发布评价。</p></span>
         <el-button type="warning" :icon="Refresh" :loading="loading" @click="load">重试同步</el-button>
       </div>
       <section class="review-metric-strip">
-        <header class="review-metric-intro"><el-icon><InfoFilled /></el-icon><span><strong>系统统计参考</strong><small>服务端依据仿真证据计算；用于辅助教师判断，不自动计入最终成绩</small></span></header>
+        <header class="review-metric-intro"><el-icon><InfoFilled /></el-icon><span><strong>仿真指标</strong><small>服务端依据仿真轨迹和事件记录计算；用于辅助教师评分，不自动计入最终成绩</small></span></header>
         <template v-if="workspace?.evaluation.objectiveMetrics?.length"><div v-for="metric in workspace.evaluation.objectiveMetrics" :key="metric.code" :class="metric.state.toLowerCase()">
           <span>{{ metric.label }}</span><strong>{{ metric.displayValue }}</strong><small>{{ metricStateLabel(metric.state) }}</small><p class="metric-detail">依据：{{ metric.detail }}</p>
-        </div></template><p v-else class="review-metric-empty" role="status"><strong>尚未生成系统统计</strong><span>完成仿真运行并生成回放证据后，这里会显示时效、安全和运行表现指标。</span></p>
+        </div></template><p v-else class="review-metric-empty" role="status"><strong>尚未生成仿真指标</strong><span>完成仿真运行并生成运行回放后，这里会显示时效、安全和运行表现指标。</span></p>
       </section>
 
-      <section class="review-evidence-facts" aria-label="冻结任务与运行证据">
-        <header><el-icon><InfoFilled /></el-icon><span><strong>冻结任务与运行证据</strong><small>以下信息来自已发布任务快照和运行会话，教师只能查看</small></span></header>
+      <section class="review-evidence-facts" aria-label="任务快照与运行记录">
+        <header><el-icon><InfoFilled /></el-icon><span><strong>任务快照与运行记录</strong><small>以下信息来自已发布任务快照和运行会话，教师只能查看</small></span></header>
         <div class="review-evidence-facts-grid">
           <div><span>任务快照</span><strong>{{ assignmentSnapshot?.id ?? props.project.assignmentSnapshotId }}</strong><small>{{ assignmentSnapshot?.publishedAt ? formatDate(assignmentSnapshot.publishedAt) : '快照信息未同步' }}</small></div>
           <div><span>D2 方案版本</span><strong>{{ assignmentSnapshot?.planVersion ?? '-' }}</strong><small>checksum {{ assignmentSnapshot?.checksum ?? '-' }}</small></div>
           <div><span>地图资源版本</span><strong>{{ assignmentSnapshot?.mapResourceVersion ?? '-' }}</strong><small>场景资源 {{ assignmentSnapshot?.sceneResourceVersion ?? '-' }}</small></div>
           <div><span>运行历史 / 重连</span><strong>{{ currentRuntimeAttempt ? `回放第 ${currentRuntimeAttempt.attemptNo} 次` : '-' }}</strong><small>{{ runtimeAttempts.length ? runtimeAttempts.map(attemptLabel).join('；') : '未同步运行会话' }}</small></div>
         </div>
-        <p v-if="isLogistics && logisticsAnalysisSections.length" class="review-route-evidence"><strong>G1 航线证据：</strong>{{ logisticsAnalysisSections[0]?.detail }}；{{ logisticsAnalysisSections[0]?.metrics.map((item) => `${item.label} ${item.displayValue}`).join('，') }}</p>
+        <p v-if="isLogistics && logisticsAnalysisSections.length" class="review-route-evidence"><strong>G1 航线指标：</strong>{{ logisticsAnalysisSections[0]?.detail }}；{{ logisticsAnalysisSections[0]?.metrics.map((item) => `${item.label} ${item.displayValue}`).join('，') }}</p>
       </section>
 
       <section v-if="isLogistics && logisticsAnalysisSections.length" class="logistics-analysis-panel">
-        <header><el-icon><DataAnalysis /></el-icon><span><strong>物流结果分析</strong><small>航线、时效、冲突、机群利用、异常响应与重调度的权威统计</small></span></header>
+        <header><el-icon><DataAnalysis /></el-icon><span><strong>物流结果分析</strong><small>航线、时效、冲突、机群利用、异常响应与重调度的系统统计</small></span></header>
         <div class="logistics-analysis-grid">
           <article v-for="section in logisticsAnalysisSections" :key="section.code" :class="section.state.toLowerCase()">
             <header><span>{{ section.label }}</span><em>{{ metricStateLabel(section.state) }}</em></header>
@@ -417,14 +417,14 @@ function runtimeEvidenceLabel(item: ShowReplayTimelineItemView) {
 
       <section class="review-timeline-panel">
         <header>
-          <div><el-icon><Timer /></el-icon><span><strong>统一回放时间轴</strong><small>{{ workspace?.timeline.length ?? 0 }} 个证据节点</small></span></div>
+          <div><el-icon><Timer /></el-icon><span><strong>统一回放时间轴</strong><small>{{ workspace?.timeline.length ?? 0 }} 个事件节点</small></span></div>
           <nav aria-label="时间轴筛选"><button v-for="item in kindOptions" :key="item.code" type="button" :class="{ active: activeKind === item.code }" :aria-pressed="activeKind === item.code" @click="activeKind = item.code">{{ item.label }}</button></nav>
         </header>
         <ol v-if="timeline.length" class="review-timeline">
           <li v-for="item in timeline" :key="item.id" :class="[item.kind.toLowerCase(), item.severity?.toLowerCase()]">
             <time>{{ formatSimulationTime(item.simulationTimeMs) }}<small>{{ formatDate(item.realTime) }}</small></time>
             <i class="timeline-node" />
-            <article role="button" tabindex="0" :aria-label="`定位回放证据：${item.title}`" @click="seekReplay(item)" @keydown.enter="seekReplay(item)" @keydown.space.prevent="seekReplay(item)">
+            <article role="button" tabindex="0" :aria-label="`定位回放事件：${item.title}`" @click="seekReplay(item)" @keydown.enter="seekReplay(item)" @keydown.space.prevent="seekReplay(item)">
               <header><span>{{ kindLabel(item.kind) }}</span><strong>{{ item.title }}</strong><em>{{ timelineStatusLabel(item.status) }}</em></header>
               <p>{{ item.detail }}</p>
               <small v-if="runtimeEvidenceLabel(item)" class="timeline-evidence">{{ runtimeEvidenceLabel(item) }}</small>
@@ -435,14 +435,14 @@ function runtimeEvidenceLabel(item: ShowReplayTimelineItemView) {
             </article>
           </li>
         </ol>
-        <div v-else class="review-empty"><strong>当前筛选没有时间轴节点</strong><span>切换筛选查看其他运行证据</span></div>
+        <div v-else class="review-empty"><strong>当前筛选没有时间轴节点</strong><span>切换筛选查看其他运行记录</span></div>
       </section>
     </main>
 
     <aside v-if="workspace" class="review-inspector">
       <template v-if="workspace?.actor === 'STUDENT'">
         <section class="review-summary-editor">
-          <header><el-icon><Document /></el-icon><div><strong>{{ isLogistics ? '运行复盘总结' : '飞后总结' }}</strong><small>{{ workspace.evaluation.studentSubmittedAt ? '已提交并锁定' : isLogistics ? '分析订单、告警、处置和改进措施' : '分析异常、决策和改进措施' }}</small></div></header>
+          <header><el-icon><Document /></el-icon><div><strong>{{ isLogistics ? '运行总结' : '飞后总结' }}</strong><small>{{ workspace.evaluation.studentSubmittedAt ? '已提交并锁定' : isLogistics ? '分析订单、告警、处置和改进措施' : '分析异常、决策和改进措施' }}</small></div></header>
           <div v-if="isLogistics" class="structured-summary-form">
             <label><span>原方案问题</span><el-input v-model="logisticsStudentSummaryStructured.originalPlanProblems" type="textarea" :rows="3" :maxlength="1600" show-word-limit :disabled="!studentCanEditSummary" placeholder="分析原航线、订单时序或资源安排中的问题。" /></label>
             <label><span>处置得失</span><el-input v-model="logisticsStudentSummaryStructured.responseLessons" type="textarea" :rows="3" :maxlength="1600" show-word-limit :disabled="!studentCanEditSummary" placeholder="说明异常识别、处置判断的有效做法与不足。" /></label>

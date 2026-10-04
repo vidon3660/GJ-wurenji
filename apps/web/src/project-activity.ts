@@ -77,19 +77,19 @@ const activityLabels = {
   LOGISTICS_DYNAMIC_SCHEDULE_CREATED: "动态调度版本已创建",
   LOGISTICS_DYNAMIC_SCHEDULE_SUBMITTED: "动态调度版本已生效",
   LOGISTICS_RUNTIME_COMPLETED: "物流配送运行已完成",
-  LOGISTICS_REVIEW_SUMMARY_SAVED: "物流复盘总结已保存",
-  LOGISTICS_REVIEW_SUMMARY_SUBMITTED: "物流复盘总结已提交",
+  LOGISTICS_REVIEW_SUMMARY_SAVED: "物流运行总结已保存",
+  LOGISTICS_REVIEW_SUMMARY_SUBMITTED: "物流运行总结已提交",
   LOGISTICS_EVALUATION_SAVED: "物流评价已保存",
   LOGISTICS_EVALUATION_PUBLISHED: "物流评价已发布",
   LOGISTICS_REPORT_GENERATED: "物流项目报告已生成",
-  QUESTION_BANK_CREATED: "题库已创建",
-  QUESTION_BANK_VERSION_CREATED: "题库版本已创建",
-  QUESTION_BANK_PUBLISHED: "题库版本已发布",
-  QUESTION_BANK_VERSION_ARCHIVED: "题库空草稿已归档",
-  QUESTION_ATTEMPT_SAVED: "题库作答已保存",
-  QUESTION_ATTEMPT_SUBMITTED: "题库作答已提交",
-  QUESTION_ATTEMPT_REGRADED: "题库作答已重新判定",
-  QUESTION_ATTEMPT_REVIEWED: "题库作答已复核",
+  QUESTION_BANK_CREATED: "场景任务已创建",
+  QUESTION_BANK_VERSION_CREATED: "场景任务版本已创建",
+  QUESTION_BANK_PUBLISHED: "场景任务版本已发布",
+  QUESTION_BANK_VERSION_ARCHIVED: "场景任务空草稿已归档",
+  QUESTION_ATTEMPT_SAVED: "方案草稿已保存",
+  QUESTION_ATTEMPT_SUBMITTED: "方案已提交",
+  QUESTION_ATTEMPT_REGRADED: "方案指标已重新计算",
+  QUESTION_ATTEMPT_REVIEWED: "方案已评分",
   TEACHER_ALERT_FOLLOW_UP_UPDATED: "教师告警跟踪已更新"
 } satisfies Record<V3ActivityEventType, string>
 
@@ -107,14 +107,14 @@ export function projectActivitySummary(event: V3ActivityEventView): string {
   if (eventType === "AREA_DRAFT_SAVED") return `${result.featureCount ?? 0} 个区域要素 · ${result.annotationCount ?? 0} 个标注`
   if (eventType === "AREA_DRAFT_CHECKED") return result.passed === true ? "检查通过" : `发现 ${result.evidenceCount ?? 0} 项问题`
   if (eventType === "AREA_PLAN_SUBMITTED" || eventType === "AREA_SNAPSHOT_CREATED") return `区域版本 V${result.versionNo ?? "-"}`
-  if (eventType === "AREA_PLAN_ACCEPTED" || eventType === "AREA_PLAN_RETURNED") return text(payload.comment, "区域审核状态已更新")
+  if (eventType === "AREA_PLAN_ACCEPTED" || eventType === "AREA_PLAN_RETURNED") return text(payload.comment, "区域确认状态已更新")
   if (eventType === "DOCUMENTS_PROVISIONED") return `已创建 ${result.documentCount ?? 0} 份申报材料`
   if (eventType === "DOCUMENT_SAVED" || eventType === "DOCUMENT_SUBMITTED" || eventType === "DOCUMENT_RESUBMITTED") return `文档版本 V${result.versionNo ?? "-"}`
   if (eventType === "DOCUMENT_RETURNED" || eventType === "DOCUMENT_VIEWED") return text(payload.comment, "材料状态已更新")
   if (eventType === "PREFLIGHT_SAVED") return `${result.confirmedCount ?? 0}/${result.itemCount ?? 0} 项已确认`
   if (eventType === "PREFLIGHT_COMPLETED") return `起飞决策：${result.decision ?? "-"}`
   if (eventType === "T60_CLOCK_STARTED") return `仿真时钟 ${result.rate ?? "-"}x`
-  if (eventType === "T60_REPORT_SUBMITTED") return "起飞前一小时申请已留痕"
+  if (eventType === "T60_REPORT_SUBMITTED") return "起飞前一小时申请已记录"
   if (eventType === "RUNTIME_SESSION_CREATED") return `${result.totalAircraft ?? 0} 架 · ${result.groupCount ?? 0} 个分组`
   if (eventType === "RUNTIME_RESTARTED" || eventType === "LOGISTICS_RUNTIME_RESTARTED") return `第 ${result.attemptNo ?? "-"} 次训练 · ${result.nodeLabel ?? result.nodeCode ?? "检查点"}`
   if (eventType === "TAKEOFF_REPORTED") return `实际起飞 ${result.actualTakeoffCount ?? 0} 架`
@@ -151,15 +151,15 @@ export function projectActivitySummary(event: V3ActivityEventView): string {
   if (eventType === "LOGISTICS_RUNTIME_ACTION_APPLIED") return `${payload.actionCode ?? "处置"} · ${result.applied === true ? "已执行" : "已记录"}`
   if (eventType === "LOGISTICS_DYNAMIC_SCHEDULE_CREATED" || eventType === "LOGISTICS_DYNAMIC_SCHEDULE_SUBMITTED") return `动态版本 V${result.versionNo ?? "-"}`
   if (eventType === "LOGISTICS_RUNTIME_COMPLETED") return "运行时刻表已完成"
-  if (eventType === "QUESTION_BANK_CREATED") return `${result.questionCount ?? 0} 道题 · 初始版本已创建`
-  if (eventType === "QUESTION_BANK_VERSION_CREATED") return `题库版本 V${payload.version ?? "-"} · ${payload.questionCount ?? 0} 道题`
-  if (eventType === "QUESTION_BANK_PUBLISHED") return `题库版本 V${payload.version ?? "-"} · ${result.questionCount ?? 0} 道题`
-  if (eventType === "QUESTION_BANK_VERSION_ARCHIVED") return `题库版本 V${payload.version ?? "-"} · ${result.bankArchived === true ? "题库已归档" : "已从工作区移出"}`
-  if (eventType === "QUESTION_ATTEMPT_SAVED") return `自动得分 ${result.autoScore ?? "-"}`
-  if (eventType === "QUESTION_ATTEMPT_SUBMITTED") return `已提交 · 自动得分 ${result.autoScore ?? "-"}`
-  if (eventType === "QUESTION_ATTEMPT_REGRADED") return `自动得分 ${result.autoScore ?? "-"} · 待证据 ${result.pendingCount ?? 0} 题`
-  if (eventType === "QUESTION_ATTEMPT_REVIEWED") return `教师得分 ${result.teacherScore ?? "-"}`
-  return "关键操作已留痕"
+  if (eventType === "QUESTION_BANK_CREATED") return `${result.questionCount ?? 0} 项 · 初始版本已创建`
+  if (eventType === "QUESTION_BANK_VERSION_CREATED") return `场景任务版本 V${payload.version ?? "-"} · ${payload.questionCount ?? 0} 项`
+  if (eventType === "QUESTION_BANK_PUBLISHED") return `场景任务版本 V${payload.version ?? "-"} · ${result.questionCount ?? 0} 项`
+  if (eventType === "QUESTION_BANK_VERSION_ARCHIVED") return `场景任务版本 V${payload.version ?? "-"} · ${result.bankArchived === true ? "场景任务已归档" : "已从工作区移出"}`
+  if (eventType === "QUESTION_ATTEMPT_SAVED") return `指标得分 ${result.autoScore ?? "-"}`
+  if (eventType === "QUESTION_ATTEMPT_SUBMITTED") return `已提交 · 指标得分 ${result.autoScore ?? "-"}`
+  if (eventType === "QUESTION_ATTEMPT_REGRADED") return `指标得分 ${result.autoScore ?? "-"} · 待生成 ${result.pendingCount ?? 0} 项`
+  if (eventType === "QUESTION_ATTEMPT_REVIEWED") return `教师评分 ${result.teacherScore ?? "-"}`
+  return "关键操作已记录"
 }
 
 function text(value: unknown, fallback: string): string {

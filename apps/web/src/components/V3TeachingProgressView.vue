@@ -434,7 +434,7 @@ function alertStatusLabel(value: V3RuntimeAlertView["status"]) {
 function alertActionBoundaryLabel(alert: V3RuntimeAlertView) {
   if (alert.status === "OPEN") return "学生尚未确认；进入项目工作区后由学生完成告警确认和应急处置。"
   if (alert.status === "ACKNOWLEDGED") return "学生已确认；后续动作仍由学生在仿真运行中完成，教师可进入工作区跟踪结果。"
-  return "该告警已解决，教师可进入项目工作区查看处置证据。"
+  return "该告警已解决，教师可进入项目工作区查看处置记录。"
 }
 
 function alertTimeLabel(alert: V3RuntimeAlertView) {

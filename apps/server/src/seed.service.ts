@@ -72,26 +72,23 @@ export class SeedService implements OnApplicationBootstrap {
     await this.ensureTemplate("广州北部低空物流演示案例", "CITY_LOGISTICS", teacher)
     await this.ensureTemplate("贵州山区垂起巡检演示案例", "VTOL_INSPECTION", teacher)
     await this.ensureQuestionBank(teacher)
-    await this.ensureSceneQuestionBank(teacher, "城市编队表演安全与舞步训练题库", "CITY_SHOW", "覆盖舞步轨迹、编队安全和同步误差证据。", [
+    await this.ensureSceneQuestionBank(teacher, "城市编队表演安全与舞步训练题库", "CITY_SHOW", "按飞行运行结果判定表演方案：安全间隔、事件处置和程序完成情况由仿真数据计算。", [
       {
-        code: "SHOW-PLAN-01", type: "PLANNING", prompt: "提交表演编队规划时，请填写舞步轨迹、编队安全检查和时刻同步方案。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["trajectoryPlan", "safetyCheck", "timingPlan"] }, stageCode: "SHOW_AREA_PLANNING", sortOrder: 1
+        code: "SHOW-SAFETY-01", type: "SIMULATION_EVIDENCE", prompt: "仿真运行结束后，运行事件控制率应达到 90% 及以上。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "EVENT_CONTROL", operator: "GTE", threshold: 90 }, stageCode: "SHOW_REVIEW", sortOrder: 1
       },
       {
-        code: "SHOW-DECISION-01", type: "SCENARIO_DECISION", prompt: "表演过程中发现编队间距低于安全阈值时，请填写暂停、分组处置和恢复条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["pauseAction", "groupAction", "resumeCondition"] }, stageCode: "SHOW_RUNTIME", sortOrder: 2
+        code: "SHOW-ALERT-01", type: "SIMULATION_EVIDENCE", prompt: "仿真运行结束后，告警确认率应达到 90% 及以上。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ALERT_ACKNOWLEDGEMENT", operator: "GTE", threshold: 90 }, stageCode: "SHOW_REVIEW", sortOrder: 2
       },
-      {
-        code: "SHOW-EVIDENCE-01", type: "SIMULATION_EVIDENCE", prompt: "仿真结束后，运行事件控制率达到 90% 及以上才视为本题通过。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "EVENT_CONTROL", operator: "GTE", threshold: 90 }, stageCode: "SHOW_REVIEW", sortOrder: 3
-      }
     ])
-    await this.ensureSceneQuestionBank(teacher, "垂起巡检任务规划与应急处置题库", "VTOL_INSPECTION", "覆盖巡检任务点、悬停质量和异常处置证据。", [
+    await this.ensureSceneQuestionBank(teacher, "垂起巡检任务规划与应急处置题库", "VTOL_INSPECTION", "按航线检查和运行快照判定巡检方案：任务覆盖、能量余度和事件处置由仿真数据计算。", [
       {
-        code: "VTL-PLAN-01", type: "PLANNING", prompt: "提交垂起巡检方案时，请填写任务点顺序、悬停要求和返航条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["taskOrder", "hoverPlan", "returnCondition"] }, stageCode: "VTL_AREA_OBJECTS", sortOrder: 1
+        code: "VTL-COVERAGE-01", type: "SIMULATION_EVIDENCE", prompt: "仿真结束后，必做巡检对象覆盖率应达到 95% 及以上。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "TASK_COVERAGE", operator: "GTE", threshold: 95 }, stageCode: "VTL_REVIEW", sortOrder: 1
       },
       {
-        code: "VTL-DECISION-01", type: "SCENARIO_DECISION", prompt: "巡检过程中出现通信质量下降时，请填写备降、任务转移和恢复条件。", gradingRule: { kind: "REQUIRED_FIELDS", fields: ["divertAction", "transferAction", "recoveryCondition"] }, stageCode: "VTOL_RUNTIME", sortOrder: 2
+        code: "VTL-ENERGY-01", type: "SIMULATION_EVIDENCE", prompt: "仿真结束后，平均剩余能量应达到 20% 及以上。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ENERGY_RESERVE", operator: "GTE", threshold: 20 }, stageCode: "VTL_REVIEW", sortOrder: 2
       },
       {
-        code: "VTL-EVIDENCE-01", type: "SIMULATION_EVIDENCE", prompt: "仿真结束后，任务点覆盖率达到 95% 及以上才视为本题通过。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "TASK_COVERAGE", operator: "GTE", threshold: 95 }, stageCode: "VTOL_REVIEW", sortOrder: 3
+        code: "VTL-EVENT-01", type: "SIMULATION_EVIDENCE", prompt: "仿真结束后，运行事件处置率应达到 100%。", gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "EVENT_RESPONSE", operator: "GTE", threshold: 100 }, stageCode: "VTL_REVIEW", sortOrder: 3
       }
     ])
     await this.ensureV3ResourcePackages(admin)
@@ -362,69 +359,45 @@ export class SeedService implements OnApplicationBootstrap {
     const title = "城市物流配送综合训练题库"
     const questions = normalizeQuestionDefinitions([
       {
-        code: "LOGISTICS-SAFETY-01",
-        type: "SINGLE_CHOICE",
-        prompt: "发现配送航线即将进入限制飞行参考区时，首要处理原则是什么？",
-        options: [
-          { key: "SAFE", label: "先暂停受影响任务并重新确认安全航线" },
-          { key: "KEEP", label: "保持原计划，等待系统自动修正" },
-          { key: "SPEED", label: "提高速度尽快穿越限制区" }
-        ],
-        correctAnswer: "SAFE",
-        explanation: "运行安全优先，应先控制风险，再进行航线或任务调整。",
-        maxScore: 10,
-        stageCode: "LOGISTICS_ROUTE_PLANNING",
-        sortOrder: 1
+        code: "LOGISTICS-COMPLETION-01", type: "SIMULATION_EVIDENCE", prompt: "仿真运行结束后，订单完成率应达到 100%。", correctAnswer: null,
+        explanation: "系统按运行快照中的完成订单数计算。", maxScore: 15, stageCode: "LOGISTICS_REVIEW",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ORDER_COMPLETION", operator: "GTE", threshold: 100 }, sortOrder: 1
       },
       {
-        code: "LOGISTICS-PLAN-01",
-        type: "PLANNING",
-        prompt: "提交物流航线规划时，请填写航线方案、安全检查和调整理由。",
-        correctAnswer: null,
-        explanation: "规划题按结构化字段完整性自动给出基础分，具体方案由教师结合证据复核。",
-        maxScore: 20,
-        stageCode: "LOGISTICS_ROUTE_PLANNING",
-        gradingRule: { kind: "REQUIRED_FIELDS", fields: ["routePlan", "safetyCheck", "reasoning"] },
-        sortOrder: 2
+        code: "LOGISTICS-ONTIME-01", type: "SIMULATION_EVIDENCE", prompt: "仿真运行结束后，准时到达率应达到 90% 及以上。", correctAnswer: null,
+        explanation: "系统按订单实际到达时间和任务时间窗计算。", maxScore: 20, stageCode: "LOGISTICS_REVIEW",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ON_TIME_DELIVERY", operator: "GTE", threshold: 90 }, sortOrder: 2
       },
       {
-        code: "LOGISTICS-SCHEDULE-01",
-        type: "SCHEDULE",
-        prompt: "提交调度方案时，请填写订单分配、时刻冲突检查和备用安排。",
-        correctAnswer: null,
-        explanation: "时刻表题先检查关键字段，再结合服务端调度指标判定。",
-        maxScore: 20,
-        stageCode: "LOGISTICS_ORDER_SCHEDULING",
-        gradingRule: { kind: "REQUIRED_FIELDS", fields: ["assignments", "conflictCheck", "fallback"] },
-        sortOrder: 3
+        code: "LOGISTICS-RESPONSE-01", type: "SIMULATION_EVIDENCE", prompt: "发生运行事件时，处置时限达标率应达到 100%。", correctAnswer: null,
+        explanation: "系统按事件发现、动作执行和教师设定时限计算。", maxScore: 15, stageCode: "LOGISTICS_EMERGENCY_HANDLING",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ACTION_DEADLINE", operator: "GTE", threshold: 100 }, sortOrder: 3
       },
       {
-        code: "LOGISTICS-EVIDENCE-01",
-        type: "SIMULATION_EVIDENCE",
-        prompt: "仿真运行结束后，准时到达率达到 90% 及以上才视为本题通过。",
-        correctAnswer: null,
-        explanation: "本题读取服务端生成的准时到达率指标，不接受浏览器自行填写的数值。",
-        maxScore: 50,
-        stageCode: "LOGISTICS_REVIEW",
-        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ON_TIME_DELIVERY", operator: "GTE", threshold: 90 },
-        sortOrder: 4
+        code: "LOGISTICS-SPATIAL-01", type: "SIMULATION_EVIDENCE", prompt: "正式航线不得与建筑物、障碍物或禁限飞区发生三维冲突。", correctAnswer: null,
+        explanation: "系统按航线验证中的空间关系证据计算。", maxScore: 15, stageCode: "LOGISTICS_ROUTE_VALIDATION",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "BUILDING_COLLISION", operator: "LTE", threshold: 0 }, sortOrder: 4
       },
       {
-        code: "LOGISTICS-EMERGENCY-01",
-        type: "SCENARIO_DECISION",
-        prompt: "发生航线中断或配送节点不可用时，请填写事件判断、应急救援动作和恢复检查。",
-        correctAnswer: null,
-        explanation: "应急救援题要求先说明受影响任务，再选择备降、返航或重调度动作，并记录恢复条件。",
-        maxScore: 20,
-        stageCode: "LOGISTICS_EMERGENCY_HANDLING",
-        gradingRule: { kind: "REQUIRED_FIELDS", fields: ["eventAssessment", "actionPlan", "recoveryCheck"] },
-        sortOrder: 5
+        code: "LOGISTICS-AIR-01", type: "SIMULATION_EVIDENCE", prompt: "调度运行期间机间隔离冲突应为 0 项。", correctAnswer: null,
+        explanation: "系统按调度时段、共享航线和交叉航线检查结果计算。", maxScore: 10, stageCode: "LOGISTICS_ORDER_SCHEDULING",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "AIR_CONFLICT", operator: "LTE", threshold: 0 }, sortOrder: 5
+      },
+      {
+        code: "LOGISTICS-PERFORMANCE-01", type: "SIMULATION_EVIDENCE", prompt: "运行方案不得触发机型高度、速度、航程或可用性限制。", correctAnswer: null,
+        explanation: "系统按航线验证和调度检查中的机型性能证据计算。", maxScore: 10, stageCode: "LOGISTICS_ROUTE_VALIDATION",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "PERFORMANCE_LIMIT", operator: "LTE", threshold: 0 }, sortOrder: 6
+      },
+      {
+        code: "LOGISTICS-ENERGY-01", type: "SIMULATION_EVIDENCE", prompt: "所有任务结束后的最低剩余电量应达到 20% 及以上。", correctAnswer: null,
+        explanation: "系统按调度计算和运行快照中的任务剩余电量计算。", maxScore: 15, stageCode: "LOGISTICS_DELIVERY_RUNTIME",
+        gradingRule: { kind: "METRIC_THRESHOLD", metricCode: "ENERGY_RESERVE", operator: "GTE", threshold: 20 }, sortOrder: 7
       }
     ])
     return this.ensurePublishedQuestionBank(teacher, {
       title,
       sceneType: "CITY_LOGISTICS",
-      summary: "覆盖物流安全判断、航线规划、时刻表设计、航线中断应急处置和仿真准时率证据。",
+      summary: "按航线检查、订单完成、准时到达和事件处置指标判定物流方案。",
       questions,
       changeNote: "开发环境物流示例题库"
     })
@@ -437,7 +410,7 @@ export class SeedService implements OnApplicationBootstrap {
       knowledgePoints: question.knowledgePoints ?? [sceneType === "CITY_SHOW" ? "编队表演" : "垂起巡检"],
       options: question.options ?? [],
       correctAnswer: question.correctAnswer ?? null,
-      explanation: question.explanation ?? "系统先检查结构化字段或仿真指标，再由教师结合运行证据复核。",
+      explanation: question.explanation ?? "系统先校验结构化参数和仿真指标，教师根据运行数据判定。",
       maxScore: question.maxScore ?? (question.type === "SIMULATION_EVIDENCE" ? 50 : 25)
     })))
     await this.ensurePublishedQuestionBank(teacher, { title, sceneType, summary, questions, changeNote: "开发环境三场景示例题库" })

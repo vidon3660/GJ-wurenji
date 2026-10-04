@@ -253,7 +253,7 @@ async function loadQuestionnaire(showError = false) {
     questionnaire.value = await api<QuestionnaireView>(`/v3/projects/${props.projectId}/questionnaire`)
   } catch (error) {
     questionnaire.value = null
-    if (showError || questionnaireVisible.value) ElMessage.error(error instanceof Error ? error.message : "题库加载失败")
+    if (showError || questionnaireVisible.value) ElMessage.error(error instanceof Error ? error.message : "场景任务加载失败")
   } finally {
     questionnaireLoading.value = false
   }
@@ -458,12 +458,12 @@ function serviceStateLabel(state: typeof serviceState.value): string {
         type="button"
         class="project-activity-command questionnaire-command"
         :class="{ active: questionnaireVisible }"
-        title="题库作答与判定"
-        :aria-label="`题库作答与判定：${questionnaireLoading ? '加载中' : questionnaire?.attempt?.status === 'SUBMITTED' ? '已提交，等待教师复核' : questionnaire?.attempt?.status === 'GRADED' ? '自动判定已完成' : questionnaire?.canEdit ? '可继续作答' : '只读查看'}`"
+        title="场景任务方案与仿真结果"
+        :aria-label="`场景任务方案与仿真结果：${questionnaireLoading ? '加载中' : questionnaire?.attempt?.status === 'SUBMITTED' ? '方案已提交，等待教师评分' : questionnaire?.attempt?.status === 'GRADED' ? '仿真计算已完成' : questionnaire?.canEdit ? '可继续编辑方案' : '只读查看'}`"
         :aria-busy="questionnaireLoading"
         @click="openQuestionnaire"
       >
-        <el-icon><DocumentChecked /></el-icon><span>题库</span>
+        <el-icon><DocumentChecked /></el-icon><span>方案</span>
       </button>
       <button type="button" class="project-activity-command" title="任务条件" aria-label="任务条件" @click="taskDrawerVisible = true"><el-icon><InfoFilled /></el-icon><span>条件</span></button>
       <button type="button" class="project-activity-command" title="项目活动记录" aria-label="项目活动记录" @click="activityDrawerVisible = true"><el-icon><Clock /></el-icon><span>{{ activities.length }}</span></button>
@@ -687,7 +687,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
 
     <el-drawer v-model="activityDrawerVisible" title="项目活动记录" size="min(420px, 100%)" append-to-body>
       <div class="project-activity-drawer" v-loading="activitiesLoading">
-        <header><span>全过程留痕</span><el-button text :icon="Refresh" @click="loadActivities">刷新</el-button></header>
+        <header><span>全过程记录</span><el-button text :icon="Refresh" @click="loadActivities">刷新</el-button></header>
         <ol v-if="activities.length" class="project-activity-timeline">
           <li v-for="event in activities" :key="event.id">
             <i :class="event.actorRole" />

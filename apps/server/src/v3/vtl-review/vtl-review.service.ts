@@ -466,9 +466,21 @@ export class VtlReviewService {
     const planCheck = plan.checkResult
     const coverage = completedTaskObjectIds.length / Math.max(1, taskObjects.length)
     const averageEnergy = aircraftResults.length ? aircraftResults.reduce((sum, item) => sum + item.finalEnergyRatio, 0) / aircraftResults.length : 0
+    const planIssues = [...(planCheck?.singleAircraftIssues ?? []), ...(planCheck?.fleetIssues ?? [])]
+    const issueCount = (codes: readonly string[]) => planIssues.filter((item) => codes.includes(item.code) && item.severity === "CONFLICT").length
+    const buildingConflictCount = issueCount(["BUILDING_COLLISION", "OBSTACLE_COLLISION", "RESTRICTED_AIRSPACE_CROSSING"])
+    const airConflictCount = issueCount(["FLEET_SEPARATION"])
+    const performanceConflictCount = issueCount(["ALTITUDE_LIMIT", "TRANSITION_HEIGHT", "ENERGY_RESERVE", "ALTERNATE_ENERGY", "TERRAIN_CLEARANCE"])
+    const totalPlannedEnergy = plan.routes.reduce((sum, route) => sum + route.totalEnergyWh, 0)
+    const longestFlightSeconds = plan.routes.reduce((maximum, route) => Math.max(maximum, route.totalDurationSeconds), 0)
     const metrics = [
       metric("TASK_COVERAGE", "任务对象覆盖", coverage * 100, "%", coverage >= 1 ? "PASS" : "RISK", `${completedTaskObjectIds.length}/${taskObjects.length} 个任务对象完成`),
       metric("PLAN_VALIDATION", "方案检查", planCheck?.passed ? "通过" : "未通过", null, planCheck?.passed ? "PASS" : "RISK", `${planCheck?.blockingIssueCount ?? 0} 项必须修改`),
+      metric("BUILDING_COLLISION", "建筑/障碍物冲突", buildingConflictCount, "项", buildingConflictCount === 0 ? "PASS" : "RISK", buildingConflictCount === 0 ? "未发现相交航段" : `${buildingConflictCount} 项航段与环境要素存在三维冲突`),
+      metric("AIR_CONFLICT", "空中冲突", airConflictCount, "项", airConflictCount === 0 ? "PASS" : "RISK", airConflictCount === 0 ? "未发现机间隔离冲突" : `${airConflictCount} 对航空器间隔不足`),
+      metric("PERFORMANCE_LIMIT", "性能约束", performanceConflictCount, "项", performanceConflictCount === 0 ? "PASS" : "RISK", performanceConflictCount === 0 ? "高度、转换和能量检查通过" : `${performanceConflictCount} 项机型性能约束未满足`),
+      metric("FLIGHT_TIME", "最长飞行时间", longestFlightSeconds, "秒", "INFO", "按航段距离和机型速度计算"),
+      metric("ENERGY_CONSUMPTION", "计划能量消耗", totalPlannedEnergy, "Wh", "INFO", "按航段功率与飞行时间计算"),
       metric("ENERGY_RESERVE", "平均剩余能量", averageEnergy * 100, "%", averageEnergy >= 0.2 ? "PASS" : "RISK", "依据最终运行快照计算"),
       metric("EVENT_RESPONSE", "事件处置率", eventResolutionRate * 100, "%", eventResolutionRate >= 1 ? "PASS" : "RISK", `${events.filter((event) => event.status === "RESOLVED").length}/${events.length} 个事件已解除`),
       metric("RUNTIME_STATUS", "运行结果", session.status, null, session.status === "COMPLETED" ? "PASS" : "RISK", `第 ${session.attemptNo} 次运行`),

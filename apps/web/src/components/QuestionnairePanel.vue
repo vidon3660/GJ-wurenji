@@ -22,7 +22,7 @@ const isTeacher = computed(() => props.questionnaire?.actor === "TEACHER")
 const canEdit = computed(() => props.questionnaire?.canEdit === true)
 const canSubmit = computed(() => props.questionnaire?.canSubmit === true)
 const canRetryFailedAction = computed(() => Boolean(lastFailedAction.value && (canEdit.value || (isTeacher.value && (props.questionnaire?.canReview || props.questionnaire?.canRegrade)))))
-const retryActionLabel = computed(() => ({ SAVE: "重试保存", SUBMIT: "重试提交", REVIEW: "重试复核", REGRADE: "重试判定" } as const)[lastFailedAction.value ?? "SAVE"])
+const retryActionLabel = computed(() => ({ SAVE: "重试保存", SUBMIT: "重试提交", REVIEW: "重试评分", REGRADE: "重试判定" } as const)[lastFailedAction.value ?? "SAVE"])
 const hasAttempt = computed(() => Boolean(props.questionnaire?.attempt))
 const pendingEvidenceCount = computed(() => (props.questionnaire?.responses ?? []).filter((response) => response.judgment === "PENDING").length)
 const autoScore = computed(() => round((props.questionnaire?.responses ?? []).reduce((sum, item) => sum + (item.autoScore ?? 0), 0)))
@@ -78,9 +78,9 @@ async function saveAnswers(submit = false, alreadyConfirmed = false) {
     try {
       await ElMessageBox.confirm(
         unansweredCount > 0
-          ? `仍有 ${unansweredCount} 道题未完成，提交后将按未作答判定且不能继续修改。仍要提交吗？`
-          : "提交后本次题库作答不能继续修改，确定提交吗？",
-        "提交作答",
+          ? `仍有 ${unansweredCount} 项方案输入未完成，提交后将不能继续修改。仍要提交吗？`
+          : "提交后方案不能继续修改，确定提交吗？",
+        "提交方案",
         { type: "warning", confirmButtonText: unansweredCount > 0 ? "仍然提交" : "提交", cancelButtonText: unansweredCount > 0 ? "返回补充" : "继续编辑" }
       )
     } catch {
@@ -97,10 +97,10 @@ async function saveAnswers(submit = false, alreadyConfirmed = false) {
     })
     emit("updated", value)
     if (submit) emit("submitted", value)
-    ElMessage.success(submit ? "作答已提交，系统已生成自动判定" : "作答已保存")
+    ElMessage.success(submit ? "方案已提交，系统将计算运行指标" : "方案草稿已保存")
   } catch (error) {
     lastFailedAction.value = submit ? "SUBMIT" : "SAVE"
-    errorText.value = error instanceof Error ? error.message : "题库作答保存失败"
+    errorText.value = error instanceof Error ? error.message : "方案保存失败"
   } finally {
     saving.value = false
   }
@@ -127,10 +127,10 @@ async function saveReview() {
       })
     })
     emit("updated", value)
-    ElMessage.success("题库作答复核已保存")
+    ElMessage.success("教师评分已保存")
   } catch (error) {
     lastFailedAction.value = "REVIEW"
-    errorText.value = error instanceof Error ? error.message : "题库复核保存失败"
+    errorText.value = error instanceof Error ? error.message : "评分保存失败"
   } finally {
     saving.value = false
   }
@@ -148,7 +148,7 @@ async function regrade() {
     ElMessage.success("已按最新仿真评价指标重新判定")
   } catch (error) {
     lastFailedAction.value = "REGRADE"
-    errorText.value = error instanceof Error ? error.message : "题库重新判定失败"
+    errorText.value = error instanceof Error ? error.message : "指标重新计算失败"
   } finally {
     saving.value = false
   }
@@ -161,7 +161,7 @@ function answerFor(question: QuestionnaireView["questions"][number]): QuestionAn
   if (answerFields.length > 0) return structuredAnswerFromFields(fieldValues.value[question.code], answerFields)
   const raw = textValues.value[question.code]?.trim() ?? ""
   if (!raw) return null
-  try { return JSON.parse(raw) as QuestionAnswer } catch { throw new Error(`题目 ${question.code} 的结构化答案不是有效 JSON`) }
+  try { return JSON.parse(raw) as QuestionAnswer } catch { throw new Error(`方案项 ${question.code} 的结构化输入不是有效 JSON`) }
 }
 
 function responseFor(code: string): QuestionResponseView | undefined {
@@ -188,7 +188,7 @@ async function locateFirstUnanswered() {
 }
 
 function questionTypeLabel(type: QuestionType) {
-  return ({ SINGLE_CHOICE: "单选题", MULTIPLE_CHOICE: "多选题", TRUE_FALSE: "判断题", PLANNING: "规划题", SCHEDULE: "时刻表题", SCENARIO_DECISION: "场景决策题", SIMULATION_EVIDENCE: "仿真证据题" } as Record<QuestionType, string>)[type]
+  return ({ SINGLE_CHOICE: "方案选项", MULTIPLE_CHOICE: "方案多选", TRUE_FALSE: "条件判断", PLANNING: "航线规划", SCHEDULE: "运行时序", SCENARIO_DECISION: "场景决策", SIMULATION_EVIDENCE: "仿真结果" } as Record<QuestionType, string>)[type]
 }
 
 function formatAnswer(value: QuestionAnswer): string {
@@ -198,7 +198,7 @@ function formatAnswer(value: QuestionAnswer): string {
 }
 
 function judgmentLabel(response: QuestionResponseView | undefined) {
-  return ({ CORRECT: "正确", PARTIAL: "部分得分", INCORRECT: "未通过", UNANSWERED: "未作答", PENDING: "等待仿真证据" } as Record<string, string>)[response?.judgment ?? "UNANSWERED"]
+  return ({ CORRECT: "正确", PARTIAL: "部分得分", INCORRECT: "未通过", UNANSWERED: "未完成", PENDING: "等待仿真结果" } as Record<string, string>)[response?.judgment ?? "UNANSWERED"]
 }
 
 function judgmentClass(response: QuestionResponseView | undefined) {
@@ -215,13 +215,13 @@ function round(value: number) {
 </script>
 
 <template>
-  <el-drawer :model-value="visible" title="题库作答与判定" size="min(720px, 100%)" append-to-body @update:model-value="emit('update:visible', $event)">
+  <el-drawer :model-value="visible" title="方案指标与运行结果" size="min(720px, 100%)" append-to-body @update:model-value="emit('update:visible', $event)">
     <div class="questionnaire-panel" v-loading="saving || loading">
       <template v-if="questionnaire?.available && questionnaire.bank">
-        <header class="questionnaire-header"><div><span class="eyebrow">{{ isTeacher ? 'TEACHER REVIEW' : 'QUESTIONNAIRE' }}</span><h2>{{ questionnaire.bank.title }}</h2><p>版本 V{{ questionnaire.bank.version }} · {{ questionnaire.questions.length }} 道题</p><p v-if="!isTeacher" class="questionnaire-scoring-guide"><span>手动作答 {{ manualQuestions.length }} 题</span><span>仿真自动判定 {{ evidenceQuestionCount }} 题</span></p></div><div class="questionnaire-score"><span>{{ !isTeacher && canEdit ? '作答进度' : studentResultPendingRelease ? '结果待发布' : !isTeacher && studentHasTeacherScore ? '教师得分' : '自动得分' }}</span><strong>{{ !isTeacher && canEdit ? answeredQuestionCount : !isTeacher ? (studentDisplayedScore ?? '—') : autoScore }}</strong><small>/ {{ !isTeacher && canEdit ? manualQuestions.length : questionnaire.attempt?.maxScore ?? questionnaire.questions.reduce((sum, question) => sum + question.maxScore, 0) }}</small><em v-if="isTeacher">教师得分 {{ teacherScore }}</em><em v-else-if="studentHasTeacherScore">自动得分 {{ autoScore }}</em><button v-else-if="canEdit && unansweredQuestions.length" type="button" @click="locateFirstUnanswered">定位 {{ unansweredQuestions.length }} 道未答题</button></div></header>
+        <header class="questionnaire-header"><div><span class="eyebrow">{{ isTeacher ? 'TEACHER SCORING' : 'SIMULATION ASSESSMENT' }}</span><h2>{{ questionnaire.bank.title }}</h2><p>版本 V{{ questionnaire.bank.version }} · {{ questionnaire.questions.length }} 项指标</p><p v-if="!isTeacher" class="questionnaire-scoring-guide"><span>方案输入 {{ manualQuestions.length }} 项</span><span>仿真计算 {{ evidenceQuestionCount }} 项</span></p></div><div class="questionnaire-score"><span>{{ !isTeacher && canEdit ? '方案输入状态' : studentResultPendingRelease ? '结果待发布' : !isTeacher && studentHasTeacherScore ? '教师评分' : '指标得分' }}</span><strong>{{ !isTeacher && canEdit ? answeredQuestionCount : !isTeacher ? (studentDisplayedScore ?? '—') : autoScore }}</strong><small>/ {{ !isTeacher && canEdit ? manualQuestions.length : questionnaire.attempt?.maxScore ?? questionnaire.questions.reduce((sum, question) => sum + question.maxScore, 0) }}</small><em v-if="isTeacher">教师评分 {{ teacherScore }}</em><em v-else-if="studentHasTeacherScore">指标得分 {{ autoScore }}</em><button v-else-if="canEdit && unansweredQuestions.length" type="button" @click="locateFirstUnanswered">定位 {{ unansweredQuestions.length }} 项未完成输入</button></div></header>
         <div v-if="errorText" class="questionnaire-error" role="alert" aria-live="assertive"><strong>{{ errorText }}</strong><div class="questionnaire-error-actions"><el-button v-if="canRetryFailedAction" text :icon="Refresh" :disabled="saving" @click="retryLastAction">{{ retryActionLabel }}</el-button><el-button text @click="errorText = ''; lastFailedAction = null">关闭</el-button></div></div>
-        <div class="questionnaire-state" role="status" aria-live="polite" :class="{ submitted: hasAttempt && questionnaire.attempt?.status !== 'IN_PROGRESS' }"><Check v-if="hasAttempt && questionnaire.attempt?.status !== 'IN_PROGRESS'" /><span v-if="isTeacher && pendingEvidenceCount > 0">有 {{ pendingEvidenceCount }} 道仿真证据题等待指标，可重新判定后再复核</span><span v-else-if="questionnaire.attempt?.status === 'SUBMITTED'">已提交，等待教师复核</span><span v-else-if="questionnaire.attempt?.status === 'GRADED'">自动判定已完成，等待教师复核</span><span v-else-if="questionnaire.attempt?.status === 'REVIEWED' && studentResultPendingRelease">教师已复核，等待教师发布结果</span><span v-else-if="questionnaire.attempt?.status === 'REVIEWED'">教师复核已完成</span><span v-else>{{ questionnaire.canEdit ? '尚未开始，可先填写并保存草稿' : '当前为只读查看' }}</span></div>
-        <div v-if="!isTeacher && !studentResultPendingRelease && questionnaire.attempt?.status === 'REVIEWED' && questionnaire.attempt.reviewComment" class="questionnaire-review-result" role="status"><strong>教师复核意见</strong><p>{{ questionnaire.attempt.reviewComment }}</p></div>
+        <div class="questionnaire-state" role="status" aria-live="polite" :class="{ submitted: hasAttempt && questionnaire.attempt?.status !== 'IN_PROGRESS' }"><Check v-if="hasAttempt && questionnaire.attempt?.status !== 'IN_PROGRESS'" /><span v-if="isTeacher && pendingEvidenceCount > 0">有 {{ pendingEvidenceCount }} 项指标等待仿真结果，可重新计算后再评分</span><span v-else-if="questionnaire.attempt?.status === 'SUBMITTED'">方案已提交，等待教师评分</span><span v-else-if="questionnaire.attempt?.status === 'GRADED'">仿真计算已完成，等待教师评分</span><span v-else-if="questionnaire.attempt?.status === 'REVIEWED' && studentResultPendingRelease">教师已完成评分，等待发布结果</span><span v-else-if="questionnaire.attempt?.status === 'REVIEWED'">教师评分已完成</span><span v-else>{{ questionnaire.canEdit ? '尚未提交方案，可先保存当前版本' : '当前为只读查看' }}</span></div>
+        <div v-if="!isTeacher && !studentResultPendingRelease && questionnaire.attempt?.status === 'REVIEWED' && questionnaire.attempt.reviewComment" class="questionnaire-review-result" role="status"><strong>教师评分说明</strong><p>{{ questionnaire.attempt.reviewComment }}</p></div>
         <section class="questionnaire-list">
           <article v-for="(question, index) in questionnaire.questions" :key="question.code" class="question-card" :class="{ unanswered: canEdit && question.type !== 'SIMULATION_EVIDENCE' && !questionAnswered(question) }" :data-question-code="question.code">
             <header><div><span class="question-number">{{ String(index + 1).padStart(2, '0') }}</span><strong>{{ questionTypeLabel(question.type) }}</strong><small>{{ question.code }} · {{ question.maxScore }} 分</small></div><span v-if="isTeacher" class="judgment" :class="judgmentClass(responseFor(question.code))">{{ judgmentLabel(responseFor(question.code)) }}</span><span v-else-if="responseFor(question.code)?.judgment !== 'UNANSWERED'" class="judgment" :class="judgmentClass(responseFor(question.code))">{{ judgmentLabel(responseFor(question.code)) }}</span></header>
@@ -229,24 +229,24 @@ function round(value: number) {
             <el-radio-group v-if="question.type === 'SINGLE_CHOICE' || question.type === 'TRUE_FALSE'" v-model="answerValues[question.code]" :disabled="!canEdit" :aria-label="`${question.code} 单选答案`"><el-radio v-for="option in question.options" :key="option.key" :label="option.key">{{ option.label }}</el-radio></el-radio-group>
             <el-checkbox-group v-else-if="question.type === 'MULTIPLE_CHOICE'" v-model="answerValues[question.code]" :disabled="!canEdit" :aria-label="`${question.code} 多选答案`"><el-checkbox v-for="option in question.options" :key="option.key" :label="option.key">{{ option.label }}</el-checkbox></el-checkbox-group>
             <div v-else-if="isStructuredQuestion(question.type) && answerFieldsFor(question).length" class="structured-answer-fields">
-              <p>按任务要求填写以下字段，保存后系统会根据字段完整度判定。</p>
+              <p>按任务要求填写结构化方案字段；运行指标由仿真计算。</p>
               <label v-for="field in answerFieldsFor(question)" :key="field">
                 <span>{{ questionFieldLabel(field) }}</span>
                 <el-input v-model="fieldValues[question.code]![field]" :disabled="!canEdit" :placeholder="`填写 ${questionFieldLabel(field)}`" :aria-label="`${question.code} ${questionFieldLabel(field)}`" />
               </label>
             </div>
-            <el-input v-else-if="isStructuredQuestion(question.type)" v-model="textValues[question.code]" type="textarea" :rows="5" :disabled="!canEdit" :aria-label="`${question.code} 结构化答案`" placeholder="填写结构化 JSON 答案，例如 routePlan 等字段" />
-            <div v-else class="evidence-placeholder"><DocumentChecked /><span>本题不需要另行填写，系统会读取服务端仿真评价指标。</span></div>
-            <div v-if="isTeacher" class="teacher-review-row"><div><label>教师评分</label><el-input-number v-model="teacherScores[question.code]" :min="0" :max="question.maxScore" :precision="2" :disabled="!questionnaire.canReview" :aria-label="`${question.code} 教师评分`" /></div><div class="teacher-comment"><label>教师评语</label><el-input v-model="teacherComments[question.code]" maxlength="1000" placeholder="可选" :disabled="!questionnaire.canReview" :aria-label="`${question.code} 教师评语`" /></div></div>
-            <div v-if="isTeacher" class="answer-reference"><strong>标准答案</strong><code>{{ formatAnswer(question.correctAnswer ?? null) || '按评分规则或仿真指标判定' }}</code><p v-if="question.explanation">{{ question.explanation }}</p></div>
-            <div v-if="responseFor(question.code)?.evidence.length" class="evidence-list"><strong>判定证据</strong><span v-for="evidence in responseFor(question.code)?.evidence ?? []" :key="`${question.code}-${evidence.detail}`"><CircleCheck /><div class="evidence-copy"><strong v-if="evidence.metricLabel || evidence.metricCode">{{ evidence.metricLabel ?? evidence.metricCode }}：{{ evidenceValue(evidence) }}</strong><small v-if="evidence.state">指标状态：{{ evidence.state }}</small><span>{{ evidence.detail }}</span></div></span></div>
+            <el-input v-else-if="isStructuredQuestion(question.type)" v-model="textValues[question.code]" type="textarea" :rows="5" :disabled="!canEdit" :aria-label="`${question.code} 结构化答案`" placeholder="提交结构化方案字段，例如 routePlan" />
+            <div v-else class="evidence-placeholder"><DocumentChecked /><span>本项无需填写，系统读取服务端仿真结果。</span></div>
+            <div v-if="isTeacher" class="teacher-review-row"><div><label>教师评分</label><el-input-number v-model="teacherScores[question.code]" :min="0" :max="question.maxScore" :precision="2" :disabled="!questionnaire.canReview" :aria-label="`${question.code} 教师评分`" /></div><div class="teacher-comment"><label>教师说明</label><el-input v-model="teacherComments[question.code]" maxlength="1000" placeholder="可选" :disabled="!questionnaire.canReview" :aria-label="`${question.code} 教师说明`" /></div></div>
+            <div v-if="isTeacher" class="answer-reference"><strong>判定规则</strong><code>{{ formatAnswer(question.correctAnswer ?? null) || '按评分规则或仿真结果判定' }}</code><p v-if="question.explanation">{{ question.explanation }}</p></div>
+            <div v-if="responseFor(question.code)?.evidence.length" class="evidence-list"><strong>仿真结果</strong><span v-for="evidence in responseFor(question.code)?.evidence ?? []" :key="`${question.code}-${evidence.detail}`"><CircleCheck /><div class="evidence-copy"><strong v-if="evidence.metricLabel || evidence.metricCode">{{ evidence.metricLabel ?? evidence.metricCode }}：{{ evidenceValue(evidence) }}</strong><small v-if="evidence.state">指标状态：{{ evidence.state }}</small><span>{{ evidence.detail }}</span></div></span></div>
           </article>
         </section>
-        <section v-if="isTeacher" class="review-comment"><label>总体复核意见</label><el-input v-model="reviewComment" type="textarea" :rows="3" maxlength="2000" aria-label="总体复核意见" /></section>
-        <footer class="questionnaire-footer"><el-button @click="emit('update:visible', false)">关闭</el-button><template v-if="!isTeacher && questionnaire.available && questionnaire.canEdit"><el-button @click="saveAnswers(false)" :loading="saving" aria-label="保存题库作答草稿">保存草稿</el-button><el-button type="primary" :icon="Check" :disabled="!questionnaire.canSubmit" :aria-label="questionnaire.canSubmit ? '提交题库作答' : `暂不能提交题库作答：${questionnaire.reason || '请完成提交条件'}`" @click="saveAnswers(true)" :loading="saving">提交作答</el-button></template><el-button v-if="isTeacher && questionnaire.canRegrade" type="warning" :icon="Refresh" @click="regrade" :loading="saving">重新判定仿真题</el-button><el-button v-if="isTeacher && questionnaire.canReview" type="primary" :icon="Check" @click="saveReview" :loading="saving">保存教师复核</el-button><span v-if="!isTeacher && questionnaire.reason" class="questionnaire-submit-hint">{{ questionnaire.reason }}</span></footer>
+        <section v-if="isTeacher" class="review-comment"><label>总体评分意见</label><el-input v-model="reviewComment" type="textarea" :rows="3" maxlength="2000" aria-label="总体评分意见" /></section>
+        <footer class="questionnaire-footer"><el-button @click="emit('update:visible', false)">关闭</el-button><template v-if="!isTeacher && questionnaire.available && questionnaire.canEdit"><el-button @click="saveAnswers(false)" :loading="saving" aria-label="保存方案草稿">保存方案草稿</el-button><el-button type="primary" :icon="Check" :disabled="!questionnaire.canSubmit" :aria-label="questionnaire.canSubmit ? '提交方案' : `暂不能提交方案：${questionnaire.reason || '请完成提交条件'}`" @click="saveAnswers(true)" :loading="saving">提交方案</el-button></template><el-button v-if="isTeacher && questionnaire.canRegrade" type="warning" :icon="Refresh" @click="regrade" :loading="saving">重新计算指标</el-button><el-button v-if="isTeacher && questionnaire.canReview" type="primary" :icon="Check" @click="saveReview" :loading="saving">保存教师评分</el-button><span v-if="!isTeacher && questionnaire.reason" class="questionnaire-submit-hint">{{ questionnaire.reason }}</span></footer>
       </template>
-      <div v-else-if="loading" class="questionnaire-empty"><Loading class="is-loading" /><strong>正在加载题库</strong><span>正在读取当前任务绑定的题库版本。</span></div>
-      <div v-else class="questionnaire-empty"><Lock /><strong>{{ questionnaire?.reason ?? '题库数据加载失败' }}</strong><span>{{ questionnaire ? '教师发布题库后，该项目将在这里显示作答入口。' : '题库暂时无法加载，已保存内容不会被清除。' }}</span><el-button v-if="!questionnaire" type="primary" :icon="Refresh" @click="emit('retry')">重新加载</el-button></div>
+      <div v-else-if="loading" class="questionnaire-empty"><Loading class="is-loading" /><strong>正在加载任务指标</strong><span>正在读取当前任务绑定的指标版本。</span></div>
+      <div v-else class="questionnaire-empty"><Lock /><strong>{{ questionnaire?.reason ?? '任务指标加载失败' }}</strong><span>{{ questionnaire ? '教师发布任务指标后，该项目将在这里显示方案提交入口。' : '指标暂时无法加载，已保存方案不会被清除。' }}</span><el-button v-if="!questionnaire" type="primary" :icon="Refresh" @click="emit('retry')">重新加载</el-button></div>
     </div>
   </el-drawer>
 </template>

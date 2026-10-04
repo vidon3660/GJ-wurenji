@@ -127,7 +127,7 @@ const configLabels: Record<string, string> = {
   scaleTemplateCode: "规模模板",
   regionPackageId: "预设区域",
   scenarioOverlayVersionId: "场景覆盖层",
-  questionBankVersionId: "题库版本",
+  questionBankVersionId: "场景任务版本",
   showProgramPackageId: "表演方案",
   availableAt: "开放时间",
   dueAt: "截止时间",

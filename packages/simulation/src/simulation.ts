@@ -10,7 +10,7 @@ import type {
   SimulationResult
 } from "@wurenji/shared"
 import { validatePlan, validateScene } from "@wurenji/shared"
-import { distance3d, horizontalDistance, interpolate, pointInPolygon, toGeo, toLocal } from "./geo.js"
+import { distance3d, horizontalDistance, interpolate, minimumDistanceDuringInterval, pointInPolygon, segmentIntersectsBox, segmentIntersectsPolygon, toGeo, toLocal } from "./geo.js"
 
 interface CompiledRoute {
   drone: DronePlan
@@ -19,6 +19,19 @@ interface CompiledRoute {
   segmentSpeeds: number[]
   totalLength: number
   duration: number
+  terrainHeights: Array<number | undefined>
+  energyPerMeter: number | null
+  energyStops: CompiledEnergyStop[]
+}
+
+interface CompiledEnergyStop {
+  waypointIndex: number
+  stationId: string
+  mode: "CHARGE" | "SWAP"
+  durationSeconds: number
+  energyWh: number
+  valid: boolean
+  reason?: string
 }
 
 interface ActiveFinding {
@@ -49,8 +62,12 @@ function rangeConsumptionFactor(input: SimulationInput): number {
 
 function compileRoute(input: SimulationInput, drone: DronePlan): CompiledRoute {
   const points = drone.waypoints.map((waypoint) => toLocal(input.scene.origin, waypoint.position))
+  const terrainHeights = drone.waypoints.map((waypoint) => waypoint.position.groundHeightMeters === undefined
+    ? undefined
+    : waypoint.position.groundHeightMeters - input.scene.origin.altitude)
   const segmentLengths: number[] = []
   const segmentSpeeds: number[] = []
+  const energyStops = compileEnergyStops(input, drone, points)
   let totalLength = 0
   let duration = drone.takeoffDelaySeconds
   const weatherFactor = rainSpeedFactor(input.scene.environment.rainLevel)
@@ -66,14 +83,70 @@ function compileRoute(input: SimulationInput, drone: DronePlan): CompiledRoute {
     segmentSpeeds.push(speed)
     totalLength += length
     duration += length / speed + (drone.waypoints[index + 1]?.waitSeconds ?? 0)
+    duration += energyStops
+      .filter((stop) => stop.valid && stop.waypointIndex === index + 1)
+      .reduce((sum, stop) => sum + stop.durationSeconds, 0)
   }
 
-  return { drone, points, segmentLengths, segmentSpeeds, totalLength, duration }
+  return {
+    drone,
+    points,
+    segmentLengths,
+    segmentSpeeds,
+    totalLength,
+    duration,
+    terrainHeights,
+    energyPerMeter: energyConsumptionPerMeter(input),
+    energyStops
+  }
 }
 
-function stateAt(input: SimulationInput, route: CompiledRoute, timeSeconds: number): { point: LocalPoint; speed: number; distance: number; status: DroneTrackSample["status"] } {
+function energyConsumptionPerMeter(input: SimulationInput): number | null {
+  const configured = input.scene.aircraft.energyConsumptionWhPerMeter
+  if (Number.isFinite(configured) && (configured ?? 0) > 0) return configured!
+  const capacity = input.scene.aircraft.batteryCapacityWh
+  const maxRange = input.scene.aircraft.maxRangeMeters
+  if (Number.isFinite(capacity) && (capacity ?? 0) > 0 && Number.isFinite(maxRange) && maxRange > 0) return capacity! / maxRange
+  return null
+}
+
+function compileEnergyStops(input: SimulationInput, drone: DronePlan, points: LocalPoint[]): CompiledEnergyStop[] {
+  const capacity = input.scene.aircraft.batteryCapacityWh
+  const stations = input.scene.chargingStations ?? []
+  return (drone.energyStops ?? []).map((stop) => {
+    const waypointIndex = drone.waypoints.findIndex((waypoint) => waypoint.id === stop.waypointId)
+    const station = stations.find((item) => item.id === stop.stationId)
+    if (waypointIndex < 0) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: "航点不存在" }
+    if (!station) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: "能源站不存在" }
+    if (!Number.isFinite(capacity) || (capacity ?? 0) <= 0) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: "场景未设置电池容量" }
+    const stationPoint = toLocal(input.scene.origin, station.position)
+    const distance = horizontalDistance(points[waypointIndex]!, stationPoint)
+    if (distance > 30) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: `航点与能源站相距 ${distance.toFixed(1)} m` }
+    const verticalDistance = Math.abs(points[waypointIndex]!.up - stationPoint.up)
+    if (verticalDistance > 20) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: `航点与能源站高差 ${verticalDistance.toFixed(1)} m` }
+    const durationSeconds = stop.durationSeconds ?? (stop.mode === "SWAP" ? station.batterySwapSeconds : undefined) ?? 0
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds: 0, energyWh: 0, valid: false, reason: "能源服务时长无效" }
+    const energyWh = stop.mode === "SWAP"
+      ? capacity!
+      : Number.isFinite(station.chargeRateWhPerSecond) && station.chargeRateWhPerSecond > 0
+        ? Math.min(capacity!, station.chargeRateWhPerSecond * durationSeconds)
+        : 0
+    if (energyWh <= 0) return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds, energyWh: 0, valid: false, reason: "能源站充电功率无效" }
+    return { waypointIndex, stationId: stop.stationId, mode: stop.mode, durationSeconds, energyWh, valid: true }
+  })
+}
+
+interface SimulationState {
+  point: LocalPoint
+  speed: number
+  distance: number
+  status: DroneTrackSample["status"]
+  segmentIndex: number
+}
+
+function stateAt(input: SimulationInput, route: CompiledRoute, timeSeconds: number): SimulationState {
   if (timeSeconds <= route.drone.takeoffDelaySeconds || route.points.length < 2) {
-    return { point: route.points[0] ?? { east: 0, north: 0, up: 0 }, speed: 0, distance: 0, status: "WAITING" }
+    return { point: route.points[0] ?? { east: 0, north: 0, up: 0 }, speed: 0, distance: 0, status: "WAITING", segmentIndex: -1 }
   }
 
   let remainingTime = timeSeconds - route.drone.takeoffDelaySeconds
@@ -94,9 +167,16 @@ function stateAt(input: SimulationInput, route: CompiledRoute, timeSeconds: numb
         point.north += Math.cos(windRadians) * drift
       }
       point.east += input.scene.environment.magneticDriftMeters * Math.sin(timeSeconds * 0.05)
-      return { point, speed, distance: travelledDistance + length * ratio, status: "FLYING" }
+      return { point, speed, distance: travelledDistance + length * ratio, status: "FLYING", segmentIndex: index }
     }
-    remainingTime -= segmentDuration + (route.drone.waypoints[index + 1]?.waitSeconds ?? 0)
+    remainingTime -= segmentDuration
+    const waitSeconds = route.drone.waypoints[index + 1]?.waitSeconds ?? 0
+    if (remainingTime <= waitSeconds) return { point: route.points[index + 1]!, speed: 0, distance: travelledDistance + length, status: "WAITING", segmentIndex: index }
+    remainingTime -= waitSeconds
+    for (const stop of route.energyStops.filter((item) => item.valid && item.waypointIndex === index + 1)) {
+      if (remainingTime <= stop.durationSeconds) return { point: route.points[index + 1]!, speed: 0, distance: travelledDistance + length, status: "WAITING", segmentIndex: index }
+      remainingTime -= stop.durationSeconds
+    }
     travelledDistance += length
   }
 
@@ -104,8 +184,87 @@ function stateAt(input: SimulationInput, route: CompiledRoute, timeSeconds: numb
     point: route.points.at(-1) ?? { east: 0, north: 0, up: 0 },
     speed: 0,
     distance: route.totalLength,
-    status: "COMPLETED"
+    status: "COMPLETED",
+    segmentIndex: route.segmentLengths.length - 1
   }
+}
+
+function effectiveBatteryCapacity(input: SimulationInput): number | null {
+  const capacity = input.scene.aircraft.batteryCapacityWh
+  if (!Number.isFinite(capacity) || (capacity ?? 0) <= 0) return null
+  const degradation = Math.max(0, Math.min(0.9, Number(input.scene.aircraft.batteryDegradationRatio ?? 0)))
+  return capacity! * (1 - degradation)
+}
+
+function reserveEnergy(input: SimulationInput, capacity: number): number {
+  const ratio = Math.max(0, Math.min(0.95, Number(input.scene.aircraft.reserveEnergyRatio ?? 0)))
+  return capacity * ratio
+}
+
+function payloadForRoute(input: SimulationInput, route: CompiledRoute): number {
+  return route.drone.assignedTaskIds.reduce((total, taskId) => total + (input.scene.taskPoints.find((task) => task.id === taskId)?.payloadKg ?? 0), 0)
+}
+
+function energyFactor(input: SimulationInput): number {
+  return rangeConsumptionFactor(input)
+}
+
+function segmentEnergy(input: SimulationInput, route: CompiledRoute, segmentIndex: number): number {
+  if (route.energyPerMeter === null) return 0
+  const payload = payloadForRoute(input, route)
+  const payloadFactor = 1 + Math.max(0, payload) * 0.02
+  return route.segmentLengths[segmentIndex]! * route.energyPerMeter * energyFactor(input) * payloadFactor
+}
+
+function energyAt(input: SimulationInput, route: CompiledRoute, timeSeconds: number): { remainingEnergyWh: number | null; consumedEnergyWh: number } {
+  const capacity = effectiveBatteryCapacity(input)
+  if (capacity === null) return { remainingEnergyWh: null, consumedEnergyWh: 0 }
+  let remaining = capacity
+  let consumed = 0
+  if (timeSeconds <= route.drone.takeoffDelaySeconds) return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+  let remainingTime = timeSeconds - route.drone.takeoffDelaySeconds
+  for (let index = 0; index < route.segmentLengths.length; index += 1) {
+    const segmentDuration = route.segmentLengths[index]! / route.segmentSpeeds[index]!
+    const energy = segmentEnergy(input, route, index)
+    if (remainingTime <= segmentDuration) {
+      const ratio = segmentDuration <= 0 ? 1 : Math.max(0, Math.min(1, remainingTime / segmentDuration))
+      consumed += energy * ratio
+      remaining = Math.max(0, remaining - energy * ratio)
+      return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+    }
+    remainingTime -= segmentDuration
+    consumed += energy
+    remaining = Math.max(0, remaining - energy)
+    const waitSeconds = route.drone.waypoints[index + 1]?.waitSeconds ?? 0
+    if (remainingTime <= waitSeconds) return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+    remainingTime -= waitSeconds
+    for (const stop of route.energyStops.filter((item) => item.valid && item.waypointIndex === index + 1)) {
+      if (remainingTime <= stop.durationSeconds) {
+        const ratio = stop.durationSeconds <= 0 ? 1 : Math.max(0, Math.min(1, remainingTime / stop.durationSeconds))
+        remaining = Math.min(capacity, remaining + stop.energyWh * ratio)
+        return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+      }
+      remainingTime -= stop.durationSeconds
+      remaining = Math.min(capacity, remaining + stop.energyWh)
+    }
+  }
+  return { remainingEnergyWh: remaining, consumedEnergyWh: consumed }
+}
+
+function terrainHeightAt(route: CompiledRoute, distance: number): number {
+  if (!route.terrainHeights.some((value) => value !== undefined)) return 0
+  let travelled = 0
+  for (let index = 0; index < route.segmentLengths.length; index += 1) {
+    const length = route.segmentLengths[index]!
+    if (distance <= travelled + length) {
+      const ratio = length <= 0 ? 0 : Math.max(0, Math.min(1, (distance - travelled) / length))
+      const start = route.terrainHeights[index] ?? route.terrainHeights[index + 1] ?? 0
+      const end = route.terrainHeights[index + 1] ?? start
+      return start + (end - start) * ratio
+    }
+    travelled += length
+  }
+  return route.terrainHeights.at(-1) ?? 0
 }
 
 function findingId(ruleCode: RuleFinding["ruleCode"], objectIds: string[]): string {
@@ -168,24 +327,42 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   const zones = input.scene.noFlyZones.map((zone) => ({ ...zone, local: zone.positions.map((position) => toLocal(input.scene.origin, position)) }))
   const obstacles = input.scene.obstacles.map((obstacle) => ({ ...obstacle, local: toLocal(input.scene.origin, obstacle.center) }))
   const tickCount = Math.ceil(durationSeconds / stepSeconds)
+  const previousStates = new Map<string, { point: LocalPoint; geo: GeoPoint; timeSeconds: number }>()
+  const batteryCapacity = effectiveBatteryCapacity(input)
+  const reserve = batteryCapacity === null ? 0 : reserveEnergy(input, batteryCapacity)
 
   for (let tick = 0; tick <= tickCount; tick += 1) {
     const timeSeconds = Math.min(durationSeconds, tick * stepSeconds)
     const states = routes.map((route) => {
       const state = stateAt(input, route, timeSeconds)
       const geo = toGeo(input.scene.origin, state.point)
+      const energy = energyAt(input, route, timeSeconds)
       tracks.get(route.drone.droneId)!.samples.push({
         timeSeconds,
         position: geo,
         speedMps: state.speed,
         distanceMeters: state.distance,
-        status: state.status
+        status: state.status,
+        ...(energy.remainingEnergyWh === null ? {} : {
+          energyRemainingWh: energy.remainingEnergyWh,
+          batteryPercent: batteryCapacity === null || batteryCapacity <= 0 ? 0 : energy.remainingEnergyWh / batteryCapacity * 100
+        })
       })
+      if (energy.remainingEnergyWh !== null && energy.remainingEnergyWh < reserve && state.status !== "WAITING") {
+        addOrExtendFinding(activeFindings, completedFindings, {
+          ruleCode: "ENERGY_INSUFFICIENT", severity: "ERROR", title: "剩余能量低于返航余度",
+          message: `${route.drone.droneId} 在 ${timeSeconds.toFixed(1)} s 时剩余能量 ${energy.remainingEnergyWh.toFixed(1)} Wh，低于返航余度 ${reserve.toFixed(1)} Wh`,
+          startTimeSeconds: timeSeconds, objectIds: [route.drone.droneId], position: geo,
+          measuredValue: energy.remainingEnergyWh, thresholdValue: reserve,
+          suggestion: "缩短航线、调整任务顺序或在能源站充电/更换电池"
+        }, tick, stepSeconds)
+      }
       return { route, state, geo }
     })
 
     for (const item of states) {
       const droneId = item.route.drone.droneId
+      const previous = previousStates.get(droneId)
       if (!pointInPolygon(item.state.point, boundary)) {
         addOrExtendFinding(activeFindings, completedFindings, {
           ruleCode: "OUT_OF_BOUNDS", severity: "ERROR", title: "无人机超出作业边界",
@@ -195,7 +372,10 @@ export function runSimulation(input: SimulationInput): SimulationResult {
         }, tick, stepSeconds)
       }
       for (const zone of zones) {
-        if (item.state.point.up >= zone.minimumAltitudeMeters && item.state.point.up <= zone.maximumAltitudeMeters && pointInPolygon(item.state.point, zone.local)) {
+        const segmentAltitudeOverlaps = !previous
+          || Math.max(previous.point.up, item.state.point.up) >= zone.minimumAltitudeMeters
+            && Math.min(previous.point.up, item.state.point.up) <= zone.maximumAltitudeMeters
+        if (segmentAltitudeOverlaps && (pointInPolygon(item.state.point, zone.local) || previous && segmentIntersectsPolygon(previous.point, item.state.point, zone.local))) {
           addOrExtendFinding(activeFindings, completedFindings, {
             ruleCode: "NO_FLY_ZONE", severity: "ERROR", title: "航线进入禁飞区",
             message: `${droneId} 进入 ${zone.name}`, startTimeSeconds: timeSeconds,
@@ -217,6 +397,39 @@ export function runSimulation(input: SimulationInput): SimulationResult {
             suggestion: "提高飞行高度或调整航迹绕开障碍物"
           }, tick, stepSeconds)
         }
+        if (previous && segmentIntersectsBox(
+          previous.point,
+          item.state.point,
+          obstacle.local,
+          obstacle.widthMeters,
+          obstacle.lengthMeters,
+          obstacle.heightMeters
+        )) {
+          addOrExtendFinding(activeFindings, completedFindings, {
+            ruleCode: "OBSTACLE", severity: "ERROR", title: "航迹穿越障碍物",
+            message: `${droneId} 的连续航段穿过 ${obstacle.name} 碰撞体`, startTimeSeconds: previous.timeSeconds,
+            objectIds: [droneId, obstacle.id], position: geoAverage(previous.geo, item.geo),
+            measuredValue: Math.max(0, item.state.point.up), thresholdValue: obstacle.heightMeters,
+            suggestion: "提高飞行高度或调整航迹绕开障碍物"
+          }, tick, stepSeconds)
+        }
+      }
+      // A terrain clearance result is meaningful only when the route carries
+      // sampled ground elevations. A missing terrain profile must not be
+      // treated as elevation 0 (which would falsely reject take-off climbs).
+      if (item.state.status === "FLYING" && item.route.terrainHeights.some((value) => value !== undefined)) {
+        const terrainHeight = terrainHeightAt(item.route, item.state.distance)
+        const clearance = item.state.point.up - terrainHeight
+        const minimumClearance = input.scene.rules.minimumTerrainClearanceMeters ?? input.scene.rules.minimumAltitudeMeters
+        if (clearance < minimumClearance) {
+          addOrExtendFinding(activeFindings, completedFindings, {
+            ruleCode: "GROUND_CLEARANCE", severity: "ERROR", title: "地面净空不足",
+            message: `${droneId} 当前地面净空 ${clearance.toFixed(1)} m，低于运行下限 ${minimumClearance.toFixed(1)} m`,
+            startTimeSeconds: timeSeconds, objectIds: [droneId], position: item.geo,
+            measuredValue: clearance, thresholdValue: minimumClearance,
+            suggestion: "提高航段高度并重新检查地形净空"
+          }, tick, stepSeconds)
+        }
       }
     }
 
@@ -225,13 +438,20 @@ export function runSimulation(input: SimulationInput): SimulationResult {
         const left = states[leftIndex]!
         const right = states[rightIndex]!
         if (left.state.status === "WAITING" && right.state.status === "WAITING") continue
-        const horizontal = horizontalDistance(left.state.point, right.state.point)
-        const vertical = Math.abs(left.state.point.up - right.state.point.up)
+        const leftPrevious = previousStates.get(left.route.drone.droneId)
+        const rightPrevious = previousStates.get(right.route.drone.droneId)
+        const interval = leftPrevious && rightPrevious
+          ? minimumDistanceDuringInterval(leftPrevious.point, left.state.point, rightPrevious.point, right.state.point)
+          : { horizontal: horizontalDistance(left.state.point, right.state.point), vertical: Math.abs(left.state.point.up - right.state.point.up), ratio: 1 }
+        const horizontal = interval.horizontal
+        const vertical = interval.vertical
         if (horizontal < input.scene.rules.horizontalSeparationMeters && vertical < input.scene.rules.verticalSeparationMeters) {
           addOrExtendFinding(activeFindings, completedFindings, {
             ruleCode: "SEPARATION", severity: "ERROR", title: "两机安全间距不足",
             message: `${left.route.drone.droneId} 与 ${right.route.drone.droneId} 最近水平间距 ${horizontal.toFixed(1)} m`,
-            startTimeSeconds: timeSeconds,
+            startTimeSeconds: leftPrevious && rightPrevious
+              ? Math.max(0, timeSeconds - stepSeconds + stepSeconds * interval.ratio)
+              : timeSeconds,
             objectIds: [left.route.drone.droneId, right.route.drone.droneId],
             position: geoAverage(left.geo, right.geo), measuredValue: horizontal,
             thresholdValue: input.scene.rules.horizontalSeparationMeters,
@@ -240,9 +460,26 @@ export function runSimulation(input: SimulationInput): SimulationResult {
         }
       }
     }
+
+    for (const item of states) {
+      previousStates.set(item.route.drone.droneId, { point: item.state.point, geo: item.geo, timeSeconds })
+    }
   }
 
   completedFindings.push(...[...activeFindings.values()].map((item) => item.finding))
+
+  for (const route of routes) {
+    for (const stop of route.energyStops.filter((item) => !item.valid)) {
+      completedFindings.push({
+        id: findingId("ENERGY_STOP_INVALID", [route.drone.droneId, stop.stationId, String(stop.waypointIndex)]),
+        ruleCode: "ENERGY_STOP_INVALID", severity: "ERROR", title: "能源服务点无效",
+        message: `${route.drone.droneId} 的能源服务点 ${stop.stationId} 无法执行：${stop.reason ?? "参数不完整"}`,
+        startTimeSeconds: 0, endTimeSeconds: route.duration, objectIds: [route.drone.droneId, stop.stationId], position: null,
+        measuredValue: null, thresholdValue: null,
+        suggestion: "将能源服务航点设置在能源站位置，并填写有效的充电或换电时长"
+      })
+    }
+  }
 
   const completedTasks = new Set<string>()
   for (const task of input.scene.taskPoints) {
@@ -351,6 +588,14 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   const completedDroneCount = resultTracks.filter((track) => track.completedAtSeconds !== null).length
   const errorCount = completedFindings.filter((finding) => finding.severity === "ERROR").length
   const warningCount = completedFindings.filter((finding) => finding.severity === "WARNING").length
+  const energyStates = routes.map((route) => energyAt(input, route, durationSeconds))
+  const totalEnergyConsumedWh = energyStates.reduce((sum, item) => sum + item.consumedEnergyWh, 0)
+  const energyValues = resultTracks.flatMap((track) => track.samples.map((sample) => sample.energyRemainingWh).filter((value): value is number => value !== undefined))
+  const minimumRemainingEnergyWh = energyValues.length === 0 ? null : Math.min(...energyValues)
+  const energyDepletionCount = new Set(completedFindings.filter((finding) => finding.ruleCode === "ENERGY_INSUFFICIENT").flatMap((finding) => finding.objectIds)).size
+  const groundRiskCount = completedFindings.filter((finding) => finding.ruleCode === "GROUND_CLEARANCE").length
+  const obstacleCollisionCount = completedFindings.filter((finding) => finding.ruleCode === "OBSTACLE").length
+  const airborneConflictCount = completedFindings.filter((finding) => finding.ruleCode === "SEPARATION").length
   const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex")
 
   return {
@@ -365,7 +610,14 @@ export function runSimulation(input: SimulationInput): SimulationResult {
       totalDistanceMeters: resultTracks.reduce((total, track) => total + track.totalDistanceMeters, 0),
       durationSeconds,
       errorCount,
-      warningCount
+      warningCount,
+      totalEnergyConsumedWh,
+      minimumRemainingEnergyWh,
+      energyDepletionCount,
+      groundRiskCount,
+      obstacleCollisionCount,
+      airborneConflictCount,
+      executable: errorCount === 0 && completedDroneCount === routes.length && completedTaskCount === input.scene.taskPoints.length
     },
     findings: completedFindings.sort((left, right) => left.startTimeSeconds - right.startTimeSeconds),
     tracks: resultTracks

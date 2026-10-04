@@ -55,7 +55,7 @@ export function vtlMapReadinessPresentation(
   return {
     state: "FALLBACK",
     title: "当前使用教学地图回退",
-    detail: "可用于本地教学演示，但不能作为正式 DEM、净空或报告复现证据。",
+    detail: "可用于本地教学演示，但不能作为正式 DEM、净空或报告复现依据。",
     publishBlocked: false,
     issues
   }

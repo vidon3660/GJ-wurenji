@@ -808,8 +808,10 @@ export function computeShowObjectiveMetrics(sources: Pick<ReviewSources, "sessio
   const averageResponseSeconds = responseSeconds.length ? round(responseSeconds.reduce((sum, value) => sum + value, 0) / responseSeconds.length, 1) : 0
   const deadlineResults = sources.actions.map((action) => action.result?.withinDeadline).filter((value): value is boolean => typeof value === "boolean")
   const deadlinePassRate = ratio(deadlineResults.filter(Boolean).length, deadlineResults.length) * 100
+  const flightTimeSeconds = sources.session ? Math.max(0, Number(sources.session.simulationTimeMs) / 1_000) : null
   return [
     metric("PROCESS_COMPLETION", "流程完成度", endReport?.status === "SUBMITTED" ? 100 : 0, "%", endReport?.status === "SUBMITTED" ? "PASS" : "RISK", endReport?.status === "SUBMITTED" ? "飞行结束报备已提交" : "飞行结束报备未提交"),
+    metric("FLIGHT_TIME", "表演运行时长", flightTimeSeconds === null ? "未生成" : flightTimeSeconds, flightTimeSeconds === null ? null : "秒", flightTimeSeconds === null ? "INFO" : "INFO", flightTimeSeconds === null ? "运行尚未开始" : "按统一仿真时钟计算"),
     metric("RISK_IDENTIFICATION", "风险识别率", ratio(detected.length, triggered.length) * 100, "%", triggered.length === 0 || detected.length === triggered.length ? "PASS" : "RISK", `${detected.length}/${triggered.length} 个运行事件已发现`),
     metric("AVG_RESPONSE_SECONDS", "平均首次处置时效", averageResponseSeconds, "秒", averageResponseSeconds <= 60 ? "PASS" : "RISK", responseSeconds.length ? `按 ${responseSeconds.length} 个可匹配事件统计` : "无可匹配处置事件"),
     metric("ACTION_DEADLINE", "处置时限达标率", deadlinePassRate, "%", deadlineResults.length === 0 || deadlinePassRate === 100 ? "PASS" : "RISK", deadlineResults.length ? `${deadlineResults.filter(Boolean).length}/${deadlineResults.length} 次关联处置在教师设定时限内` : "教师未设置处置时限"),

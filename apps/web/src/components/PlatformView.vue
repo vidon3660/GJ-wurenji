@@ -73,17 +73,17 @@ const serviceDetail = computed(() => serviceState.value === "SYNCING" ? "正在�
 const onboardingStudentProject = computed(() => studentProjects.value.find((item) => item.status === "IN_PROGRESS") ?? studentProjects.value.find((item) => item.status === "NOT_STARTED") ?? studentProjects.value[0] ?? null)
 const onboardingMissionTitle = computed(() => {
   switch (onboardingMission.value?.action) {
-    case "teacher-first-question-bank": return "创建首套题库"
+    case "teacher-first-question-bank": return "配置首个场景任务"
     case "teacher-first-assignment": return "发布首个场景任务"
-    case "student-first-questionnaire": return "完成首份题库作答"
+    case "student-first-questionnaire": return "提交首个方案"
     default: return "完成首个学生操作"
   }
 })
 const onboardingMissionDetail = computed(() => {
   switch (onboardingMission.value?.action) {
-    case "teacher-first-question-bank": return "进入题库管理，创建至少一道题并发布版本"
-    case "teacher-first-assignment": return "核对题库和任务条件，预检通过后点击“确认发布”"
-    case "student-first-questionnaire": return "进入当前实训，打开“题库”并提交一份作答"
+    case "teacher-first-question-bank": return "进入场景任务库，配置任务项和仿真指标并发布版本"
+    case "teacher-first-assignment": return "检查场景任务和任务条件，预检通过后点击“确认发布”"
+    case "student-first-questionnaire": return "进入当前实训，打开“方案”并提交一份方案"
     default: return "进入当前实训，开始或恢复阶段；仿真已开放时可进入仿真运行"
   }
 })
@@ -93,7 +93,7 @@ const navItems = computed(() => isTeacher.value
       { key: "assignments" as const, label: "任务库", icon: Collection },
       ...(props.user.role === "admin" ? [{ key: "resources" as const, label: "资源包管理", icon: Box }] : []),
       { key: "classes" as const, label: "班级", icon: User },
-      { key: "question-banks" as const, label: "题库", icon: Collection }
+      { key: "question-banks" as const, label: "场景任务库", icon: Collection }
     ]
   : [
       { key: "home" as const, label: "学习概览", icon: DataBoard },
@@ -378,7 +378,7 @@ async function completeOnboardingMission(action: OnboardingAction) {
     })
     clearOnboardingProgress(onboardingStorage, props.user.id, onboarding.value)
     onboardingMission.value = null
-    ElMessage.success("首次实操已完成，后续可从帮助入口重新查看引导")
+    ElMessage.success("首次训练流程已完成，后续可从帮助入口重新查看引导")
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "首次实操状态保存失败")
   } finally {
@@ -401,7 +401,7 @@ function handleQuestionBankPublished() {
   onboardingMission.value = mission
   saveOnboardingMission(onboardingStorage, props.user.id, onboarding.value, mission)
   activeSection.value = "regions"
-  ElMessage.success("题库版本已发布，下一步请选择区域并发布首个任务")
+  ElMessage.success("场景任务版本已发布，下一步请选择区域并发布首个任务")
 }
 
 function handleStudentOnboardingAction(action: "stage-started" | "simulation-opened" | "questionnaire-submitted") {

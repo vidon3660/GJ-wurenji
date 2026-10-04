@@ -1041,7 +1041,7 @@ function formatDistance(value: number): string {
 
       <div v-else-if="panelTab === 'CHECK'">
         <section class="route-check-overview">
-          <header><strong>{{ relationOnly ? '多航线空间关系' : '规则检查' }}</strong><em :class="{ passed: checkResult?.passed }">{{ !checkResult ? '尚未检查' : relationOnly ? `${displayedEvidence.length} 项关系证据` : checkResult.passed ? '无硬冲突' : `${checkResult.conflictCount} 项阻断` }}</em></header>
+          <header><strong>{{ relationOnly ? '多航线空间关系' : '规则检查' }}</strong><em :class="{ passed: checkResult?.passed }">{{ !checkResult ? '尚未检查' : relationOnly ? `${displayedEvidence.length} 项空间关系项` : checkResult.passed ? '无硬冲突' : `${checkResult.conflictCount} 项阻断` }}</em></header>
           <div><span><b>{{ relationOnly ? displayedEvidenceCounts.conflict : checkResult?.conflictCount ?? 0 }}</b><small>{{ relationOnly ? '关系冲突' : '硬性冲突' }}</small></span><span><b>{{ relationOnly ? displayedEvidenceCounts.risk : checkResult?.riskCount ?? 0 }}</b><small>{{ relationOnly ? '关系风险' : '运行风险' }}</small></span><span><b>{{ relationOnly ? displayedEvidenceCounts.info : checkResult?.infoCount ?? 0 }}</b><small>{{ relationOnly ? '关系提示' : '效率提示' }}</small></span></div>
         </section>
         <section v-if="!relationOnly" class="route-check-categories" aria-label="当前航线检查分类">
@@ -1058,7 +1058,7 @@ function formatDistance(value: number): string {
           <button v-for="evidence in displayedEvidence" :key="`${evidence.code}-${evidence.routeIds.join('-')}-${evidence.segmentIndexes.join('-')}`" type="button" :class="[evidence.severity.toLowerCase(), { active: selectedEvidence === evidence }]" :aria-pressed="selectedEvidence === evidence" @click="selectEvidence(evidence)">
             <el-icon><Warning v-if="evidence.severity !== 'INFO'" /><Finished v-else /></el-icon><span><strong>{{ evidenceCategoryLabel(evidence.category) }} · {{ formatLogisticsEvidenceCode(evidence.code) }}</strong><small>{{ evidence.message }}</small></span>
           </button>
-          <div v-if="displayedEvidence.length === 0" class="route-check-empty"><CircleCheck /><span>{{ checkResult ? relationOnly ? '当前航线之间未发现空间交叉' : '当前方案未发现规则问题' : '保存方案后执行权威检查' }}</span></div>
+          <div v-if="displayedEvidence.length === 0" class="route-check-empty"><CircleCheck /><span>{{ checkResult ? relationOnly ? '当前航线之间未发现空间交叉' : '当前方案未发现规则问题' : '保存方案后执行规则检查' }}</span></div>
         </section>
         <section v-if="problemLocation" class="route-problem-location" aria-label="问题定位详情">
           <header><div><strong>问题定位</strong></div><em :class="problemLocation.severity.toLowerCase()">{{ problemLocation.severity === 'CONFLICT' ? '硬性冲突' : problemLocation.severity === 'RISK' ? '运行风险' : '效率提示' }}</em></header>
@@ -1107,7 +1107,7 @@ function formatDistance(value: number): string {
             </div>
             <em :class="version.status.toLowerCase()">{{ formatSubmissionStatus(version.status) }}</em>
             <div class="version-actions">
-              <button type="button" :class="{ selected: comparisonBaselineId === version.id }" :aria-pressed="comparisonBaselineId === version.id" title="设为对比基线" @click="comparisonBaselineId = version.id">基线</button>
+              <button type="button" :class="{ selected: comparisonBaselineId === version.id }" :aria-pressed="comparisonBaselineId === version.id" title="设为参考版本" @click="comparisonBaselineId = version.id">参考版本</button>
               <button type="button" :class="{ selected: comparisonTargetId === version.id }" :aria-pressed="comparisonTargetId === version.id" title="设为对比目标" @click="comparisonTargetId = version.id">目标</button>
               <button v-if="canEdit" type="button" title="恢复为当前草稿" aria-label="恢复为当前草稿" @click="restoreVersion(version.id)"><el-icon><RefreshRight /></el-icon>恢复</button>
             </div>
@@ -1117,7 +1117,7 @@ function formatDistance(value: number): string {
         <section v-if="versionComparison && comparisonBaseline && comparisonTarget" class="route-version-comparison" aria-label="航线版本结果对比">
           <header>
             <div><span>版本对比</span><strong>V{{ comparisonBaseline.versionNo }} 与 V{{ comparisonTarget.versionNo }}</strong></div>
-            <small>目标版本相对基线</small>
+            <small>目标版本相对参考版本</small>
           </header>
           <div class="version-delta-grid">
             <span><small>航线</small><b>{{ formatDelta(versionComparison.deltas.routeCount) }}</b></span>
@@ -1137,7 +1137,7 @@ function formatDistance(value: number): string {
           <p>每次验证均绑定不可变方案版本；恢复历史版本后必须重新验证，旧方案和旧结果继续保留。</p>
         </section>
         <section v-else-if="(workspace?.versions.length ?? 0) > 1" class="route-version-compare-hint">
-          请选择不同的基线和目标版本进行结果对比。
+          请选择不同的参考版本和目标版本进行结果对比。
         </section>
       </div>
 

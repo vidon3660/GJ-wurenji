@@ -653,7 +653,7 @@ function selectRuntimeEvent(eventId: string) {
 async function startRuntime() {
   if (!workspace.value) return
   try {
-    await ElMessageBox.confirm("启动后将以服务端权威时钟执行正式初始调度，并开始记录运行事件与学生处置。", "启动配送运行", {
+    await ElMessageBox.confirm("启动后将以服务端仿真时钟执行正式初始调度，并开始记录运行事件与学生处置。", "启动配送运行", {
       type: "warning",
       confirmButtonText: "启动运行",
       cancelButtonText: "返回"
@@ -721,7 +721,7 @@ async function executeAction(actionCode: LogisticsRuntimeActionCode, targetId: s
   if (actionSubmitting.value || !workspace.value) return
   const definition = workspace.value.availableActions.find((item) => item.code === actionCode)
   if (!definition?.enabled && actionCode !== "ACKNOWLEDGE_ALERT") return
-  if (!actionReasoningValid.value) return ElMessage.warning("请完整填写异常发现、判断依据和预期结果")
+  if (!actionReasoningValid.value) return ElMessage.warning("请完整填写异常发现、处置理由和预期结果")
   const reasoning: V3RuntimeActionReasoning = {
     observation: actionObservation.value,
     rationale: actionRationale.value,
@@ -837,7 +837,7 @@ async function createDynamicVersion() {
 async function submitDynamicVersion() {
   if (!workspace.value || !selectedDynamicVersion.value?.checkResult.submittable || selectedDynamicVersion.value.status !== "DRAFT") return
   const versionNo = selectedDynamicVersion.value.versionNo
-  dynamicProgress.value = startV3OperationProgress("动态重调度生效", ["复核核定结果", "提交生效请求", "刷新运行时刻表"])
+  dynamicProgress.value = startV3OperationProgress("动态重调度生效", ["检查调度结果", "提交生效请求", "刷新运行时刻表"])
   dynamicProgress.value = advanceV3OperationProgress(dynamicProgress.value, 1)
   const mutation = await mutate(`/v3/logistics-projects/${props.project.id}/runtime/dynamic-schedules/${selectedDynamicVersion.value.id}/submit`, {
     expectedRevision: workspace.value.session.revision
@@ -852,9 +852,9 @@ async function submitDynamicVersion() {
 
 async function completeEmergencyHandling() {
   try {
-    await ElMessageBox.confirm("确认所有运行事件与应急处置已经复核，并进入项目复盘阶段。", "完成应急处置", {
+    await ElMessageBox.confirm("确认所有运行事件与应急处置已完成，并进入运行总结阶段。", "完成应急处置", {
       type: "warning",
-      confirmButtonText: "完成并进入复盘",
+      confirmButtonText: "完成并进入总结",
       cancelButtonText: "返回"
     })
   } catch {
@@ -1176,7 +1176,7 @@ function dynamicScheduleModeLabel(value: string) {
             <strong>实际业务后果</strong>
             <ul v-if="selectedAlertConsequences.length"><li v-for="item in selectedAlertConsequences" :key="item">{{ item }}</li></ul>
             <p v-else>{{ runtimeActionResultLabel(selectedAlertAction.result) }}</p>
-            <small v-if="selectedAlertEvidence.length">评分证据：{{ selectedAlertEvidence.join(' · ') }}</small>
+            <small v-if="selectedAlertEvidence.length">评分指标：{{ selectedAlertEvidence.join(' · ') }}</small>
           </div>
         </div>
         <el-select v-model="selectedActionCode" placeholder="选择处置操作" aria-label="选择物流应急处置动作"><el-option v-for="action in studentActions" :key="action.code" :label="runtimeActionOptionLabel(action.title, action.enabled, action.disabledReason)" :value="action.code" :disabled="!action.enabled" /></el-select>
@@ -1188,7 +1188,7 @@ function dynamicScheduleModeLabel(value: string) {
         <label v-if="selectedActionCode === 'CHANGE_PRIORITY'"><span>订单优先级</span><el-select v-model="selectedPriority"><el-option v-for="option in priorityOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
         <div class="action-reasoning-fields">
           <label><span>异常发现</span><el-input v-model="actionObservation" type="textarea" :rows="2" maxlength="1000" placeholder="描述看到的异常（至少4字）" /></label>
-          <label><span>判断依据</span><el-input v-model="actionRationale" type="textarea" :rows="2" maxlength="1000" placeholder="说明为什么选择该动作（至少4字）" /></label>
+          <label><span>处置理由</span><el-input v-model="actionRationale" type="textarea" :rows="2" maxlength="1000" placeholder="说明为什么选择该动作（至少4字）" /></label>
           <label><span>预期结果</span><el-input v-model="actionExpectedOutcome" type="textarea" :rows="2" maxlength="1000" placeholder="说明希望达到的结果（至少4字）" /></label>
         </div>
         <el-button class="execute-runtime-action" type="primary" :loading="actionSubmitting" :disabled="actionSubmitting || !actionSubmissionValid" @click="executeSelectedAction">{{ selectedAlert?.status === 'RESOLVED' ? '该告警已处置' : actionSubmitting ? '提交中...' : '执行处置' }}</el-button>
@@ -1215,11 +1215,11 @@ function dynamicScheduleModeLabel(value: string) {
       </section>
 
       <section class="runtime-route-list"><header><strong>航线运行状态</strong><span>{{ workspace?.routes.length ?? 0 }} ROUTES</span></header><button v-for="route in workspace?.routes ?? []" :key="route.id" type="button" :class="[route.status.toLowerCase(), { selected: selectedRouteId === route.id }]" :aria-pressed="selectedRouteId === route.id" @click="selectedRouteId = route.id"><i /><div><strong>{{ route.name }}</strong><small>{{ route.direction === 'OUTBOUND' ? '去程' : '返程' }} · {{ routeRoleLabel(route.role) }} · V{{ route.sourceVersionNo }} {{ routeValidationLabel(route.validationStatus) }} · {{ route.activeTaskCount }} 个活动任务</small></div><em>{{ routeStatusLabel(route.status) }}</em></button></section>
-      <el-button v-if="canCompleteEmergency" class="complete-emergency" type="primary" :icon="CircleCheck" :loading="loading" :disabled="loading" aria-label="完成物流应急处置并进入复盘" @click="completeEmergencyHandling">{{ loading ? '正在进入复盘...' : '完成应急处置并复盘' }}</el-button>
+      <el-button v-if="canCompleteEmergency" class="complete-emergency" type="primary" :icon="CircleCheck" :loading="loading" :disabled="loading" aria-label="完成物流应急处置并进入总结" @click="completeEmergencyHandling">{{ loading ? '正在进入总结...' : '完成应急处置并总结' }}</el-button>
     </aside>
 
     <section ref="runtimeMissionPanelElement" class="runtime-mission-table" tabindex="-1" aria-labelledby="runtime-mission-title">
-      <header><div><span>MISSION BOARD</span><strong id="runtime-mission-title">飞行任务与时刻表</strong></div><small>{{ workspace?.tasks.length ?? 0 }} 班 · 服务端权威状态</small></header>
+      <header><div><span>MISSION BOARD</span><strong id="runtime-mission-title">飞行任务与时刻表</strong></div><small>{{ workspace?.tasks.length ?? 0 }} 班 · 服务端运行状态</small></header>
       <div class="runtime-mission-head"><span>任务</span><span>无人机</span><span>当前阶段</span><span>计划起飞</span><span>预计到达</span><span>预计落地</span><span>电量</span></div>
       <div class="runtime-mission-body"><button v-for="task in missionBoardTasks" :key="task.scheduleItemId" type="button" :class="[task.status.toLowerCase(), { selected: selectedOrderId === task.orderId }]" :data-schedule-item-id="task.scheduleItemId" :data-order-id="task.orderId" :data-aircraft-id="task.aircraftId" :data-destination-node-id="task.destinationNodeId" :data-planned-takeoff-ms="task.plannedTakeoffTimeMs" :aria-label="`${task.orderCode}，${destinationNodeName(task.destinationNodeId)}，${task.aircraftCode}，计划起飞${formatDuration(task.plannedTakeoffTimeMs)}`" :aria-pressed="selectedOrderId === task.orderId" @click="selectedOrderId = task.orderId; selectedAircraftId = task.aircraftId; selectedRouteId = task.activeRouteId ?? selectedRouteId"><span><strong class="runtime-mission-order">{{ task.orderCode }}</strong><small class="runtime-mission-destination">{{ destinationNodeName(task.destinationNodeId) }}</small></span><span class="runtime-mission-aircraft">{{ task.aircraftCode }}</span><em>{{ taskStatusLabel(task.status) }}</em><span class="runtime-mission-planned">{{ formatDuration(task.plannedTakeoffTimeMs) }}</span><span>{{ formatDuration(task.arrivalTimeMs) }}</span><span>{{ formatDuration(task.landingTimeMs) }}</span><b>{{ Math.round(task.batteryPercent) }}%</b></button></div>
     </section>

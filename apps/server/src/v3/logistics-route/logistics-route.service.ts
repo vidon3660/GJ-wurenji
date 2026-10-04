@@ -723,7 +723,7 @@ export class LogisticsRouteService {
 
   private maybeRedactValidation(result: LogisticsRouteValidationResult, redact: boolean): LogisticsRouteValidationResult {
     if (!redact) return result
-    return { ...result, routeMetrics: [], roundTripMetrics: [], evidence: this.redactEvidence(result.evidence) }
+    return { ...result, evidence: this.redactEvidence(result.evidence) }
   }
 
   private redactEvidence(evidence: LogisticsRouteCheckResult["evidence"]): LogisticsRouteCheckResult["evidence"] {

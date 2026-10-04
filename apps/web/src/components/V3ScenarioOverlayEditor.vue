@@ -448,13 +448,13 @@ function statusLabel(status: V3ScenarioOverlayVersionView["status"]) { return st
         <div class="overlay-map-toolbar" role="toolbar" aria-label="地图视图与图层控制">
           <div class="overlay-view-switch" aria-label="编辑器地图视图">
             <button type="button" :class="{ active: mapMode === '2d' }" :aria-pressed="mapMode === '2d'" @click="mapMode = '2d'">2D 编辑</button>
-            <button type="button" :class="{ active: mapMode === '3d' }" :aria-pressed="mapMode === '3d'" @click="mapMode = '3d'">3D 复核</button>
+            <button type="button" :class="{ active: mapMode === '3d' }" :aria-pressed="mapMode === '3d'" @click="mapMode = '3d'">3D 检查</button>
           </div>
           <div class="overlay-history-actions" aria-label="编辑历史">
             <button type="button" title="撤销 (Ctrl+Z)" aria-label="撤销" :disabled="!canUndo" @click="undoEdit"><el-icon><RefreshLeft /></el-icon></button>
             <button type="button" title="重做 (Ctrl+Y)" aria-label="重做" :disabled="!canRedo" @click="redoEdit"><el-icon><RefreshRight /></el-icon></button>
           </div>
-          <span class="overlay-map-mode-note">{{ mapMode === '2d' ? '二维编辑 · 可放置和绘制教学元素' : '三维编辑 · 可复核空间关系并继续绘制' }}</span>
+          <span class="overlay-map-mode-note">{{ mapMode === '2d' ? '二维编辑 · 可放置和绘制教学元素' : '三维编辑 · 可检查空间关系并继续绘制' }}</span>
         </div>
         <V3UnifiedMap ref="mapRef" class="overlay-editor-map-canvas" :region="region" :visible-layers="visibleBaseLayers" :mode="mapMode" :editor-features="editorFeatures" :editor-drawing-points="drawingPoints" :editor-drawing-active="drawing" :editor-editing-enabled="canEdit" :editor-labels-visible="labelsVisible" @data-state="handleMapDataState" @editor-map-click="handleMapClick" @editor-map-selected="handleMapSelected" @editor-feature-moved="handleEditorFeatureMoved" />
         <div class="overlay-map-note">{{ drawing ? `正在绘制：${objectTypeLabels[objectType]} · 已选 ${drawingPoints.length} 个点` : '基础图层只读 · 覆盖层对象可编辑' }}</div>

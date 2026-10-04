@@ -195,10 +195,19 @@ export class VtlInspectionService {
     this.requireStudent(user)
     await this.dataSource.transaction(async (manager) => {
       const { project, plan } = await this.lock(manager, projectId, user)
+      const region = await this.resources.findRegion(project.snapshot.config.regionPackageId)
       await this.requireStage(manager, projectId, "VTL_PLAN_VALIDATION")
       const mainLandingSiteId = configuredMainLandingSiteId(project)
       const mainLandingSite = plan.landingSites.find((site) => site.id === mainLandingSiteId && site.type === "MAIN" && site.status === "AVAILABLE")
       if (!mainLandingSite) throw new ConflictException("教师选择的主起降点不可用")
+      const environmentFeatures = region.layers
+        .filter((layer) => layer.code === "BUILDINGS" || layer.code === "RESTRICTIONS")
+        .flatMap((layer) => layer.features.map((feature) => ({
+          ...feature,
+          kind: layer.code === "RESTRICTIONS"
+            ? "RESTRICTION" as const
+            : feature.properties.category === "OBSTACLE" ? "OBSTACLE" as const : "BUILDING" as const
+        })))
       plan.checkResult = validateVtlPlan({
         projectId,
         allocationRevision: plan.allocation.revision,
@@ -208,7 +217,8 @@ export class VtlInspectionService {
         parameters: plan.aircraftParameters,
         mainLandingSiteId: mainLandingSite.id,
         availableAlternateLandingSiteIds: plan.landingSites.filter((site) => site.type === "ALTERNATE" && site.status === "AVAILABLE").map((site) => site.id),
-        mainLandingSitePosition: mainLandingSite.position
+        mainLandingSitePosition: mainLandingSite.position,
+        environmentFeatures
       })
       if (!plan.checkResult.passed) {
         const now = new Date()

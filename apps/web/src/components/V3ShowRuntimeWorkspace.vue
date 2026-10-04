@@ -497,7 +497,7 @@ async function executeAction(actionCode: ShowRuntimeActionCode, alertId: string 
   if (actionSubmitting.value || !workspace.value) return
   const definition = workspace.value.availableActions.find((item) => item.code === actionCode)
   if (!definition?.enabled) return
-  if (!actionReasoningValid.value) return ElMessage.warning("请完整填写异常发现、判断依据和预期结果")
+  if (!actionReasoningValid.value) return ElMessage.warning("请完整填写异常发现、处置理由和预期结果")
   const reasoning: V3RuntimeActionReasoning = {
     observation: actionObservation.value,
     rationale: actionRationale.value,
@@ -781,7 +781,7 @@ function groupStatusLabel(value: string) {
         </el-select>
         <div class="action-reasoning-fields">
           <label><span>异常发现</span><el-input v-model="actionObservation" type="textarea" :rows="2" maxlength="1000" placeholder="描述看到的异常（至少4字）" :disabled="selectedEventHandled" /></label>
-          <label><span>判断依据</span><el-input v-model="actionRationale" type="textarea" :rows="2" maxlength="1000" placeholder="说明为什么选择该动作（至少4字）" :disabled="selectedEventHandled" /></label>
+          <label><span>处置理由</span><el-input v-model="actionRationale" type="textarea" :rows="2" maxlength="1000" placeholder="说明为什么选择该动作（至少4字）" :disabled="selectedEventHandled" /></label>
           <label><span>预期结果</span><el-input v-model="actionExpectedOutcome" type="textarea" :rows="2" maxlength="1000" placeholder="说明希望达到的结果（至少4字）" :disabled="selectedEventHandled" /></label>
         </div>
         <el-button type="primary" :loading="actionSubmitting" :disabled="selectedEventHandled || actionSubmitting || !selectedAction?.enabled || (selectedAction.requiresTarget && !selectedTargetId) || !actionReasoningValid" @click="executeSelectedAction">{{ selectedEventHandled ? '该事件已处置' : actionSubmitting ? '提交中...' : '执行处置' }}</el-button>
@@ -790,7 +790,7 @@ function groupStatusLabel(value: string) {
           <header><span>实际影响</span><strong>实际业务后果</strong></header>
           <ul v-if="selectedEventConsequences.length"><li v-for="item in selectedEventConsequences" :key="item">{{ item }}</li></ul>
           <p v-else>{{ runtimeActionResultLabel(selectedEventAction.result) }}</p>
-          <div class="show-action-evidence"><small>评分证据</small><span v-for="item in selectedEventEvidence" :key="item">{{ item }}</span><em v-if="selectedEventEvidence.length === 0">暂无时效或事件控制证据</em></div>
+          <div class="show-action-evidence"><small>评分指标</small><span v-for="item in selectedEventEvidence" :key="item">{{ item }}</span><em v-if="selectedEventEvidence.length === 0">暂无时效或事件控制指标</em></div>
         </article>
         <ol v-if="recentActions.length" class="recent-action-records">
           <li v-for="action in recentActions" :key="action.id">

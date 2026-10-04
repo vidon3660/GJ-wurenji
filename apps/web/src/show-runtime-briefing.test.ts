@@ -15,7 +15,7 @@ describe("show runtime teaching briefing", () => {
     expect(briefing.impact).toContain("4 架无人机")
     expect(briefing.objective).toContain("编队缺口")
     expect(briefing.successCriteria).toContain("单架降落")
-    expect(briefing.scoringEvidence).toContain("邻机安全复核")
+    expect(briefing.scoringEvidence).toContain("邻机安全间隔检查")
   })
 
   it("presents authoritative consequences and scoring evidence", () => {

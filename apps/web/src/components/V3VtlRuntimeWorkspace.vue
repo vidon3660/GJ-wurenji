@@ -382,9 +382,9 @@ async function triggerTeacherEvent() {
 async function completeEmergency() {
   if (!workspace.value || !canCompleteEmergency.value) return
   try {
-    await ElMessageBox.confirm("确认所有巡检事件均已完成处置，并进入复盘评价阶段？", "完成事件处置", {
+    await ElMessageBox.confirm("确认所有巡检事件均已完成处置，并进入运行总结阶段？", "完成事件处置", {
       type: "warning",
-      confirmButtonText: "确认进入复盘",
+      confirmButtonText: "确认进入总结",
       cancelButtonText: "返回"
     })
   } catch {
@@ -571,7 +571,7 @@ function jumpToVtlSection(selector: string) {
         <select v-if="selectedActionCode === 'ADJUST_GROUP'" v-model="destinationGroupId" aria-label="选择目标分组" :disabled="selectedEvent?.status === 'RESOLVED'"><option v-for="group in planning?.plan.allocation.groups ?? []" :key="group.id" :value="group.id">调整至 {{ formatVtlGroupCode(group.code) }}</option></select>
         <div class="action-outcome-preview"><small>预期处置结果</small><strong>{{ actionOutcomePreview }}</strong></div>
         <textarea v-model="actionObservation" rows="2" maxlength="1000" aria-label="异常发现" placeholder="异常发现（至少4字）" :disabled="selectedEvent?.status === 'RESOLVED'" />
-        <textarea v-model="actionRationale" rows="2" maxlength="1000" aria-label="判断依据" placeholder="判断依据（至少4字）" :disabled="selectedEvent?.status === 'RESOLVED'" />
+        <textarea v-model="actionRationale" rows="2" maxlength="1000" aria-label="处置理由" placeholder="处置理由（至少4字）" :disabled="selectedEvent?.status === 'RESOLVED'" />
         <textarea v-model="actionExpectedOutcome" rows="2" maxlength="1000" aria-label="预期处置结果" placeholder="预期结果（至少4字）" :disabled="selectedEvent?.status === 'RESOLVED'" />
         <button type="button" class="primary" :disabled="actionSubmitting || !actionValid || !reasoningValid" :aria-busy="actionSubmitting" @click="executeAction">{{ selectedEvent?.status === 'RESOLVED' ? '该事件已处置' : actionSubmitting ? '提交中...' : '执行处置' }}</button>
         <div v-if="actionError" class="runtime-action-error" role="alert" aria-live="assertive"><span>{{ actionError }}</span><button type="button" :disabled="actionSubmitting" @click="executeAction">重试处置</button></div>
@@ -579,7 +579,7 @@ function jumpToVtlSection(selector: string) {
           <header><span>实际影响</span><strong>实际业务后果</strong></header>
           <p v-if="selectedEventConsequences.length === 0">{{ actionResultMessage(selectedEventAction.result) }}</p>
           <ul v-else><li v-for="item in selectedEventConsequences" :key="item">{{ item }}</li></ul>
-          <div class="vtl-action-evidence"><small>评分证据</small><span v-for="item in selectedEventEvidence" :key="item">{{ item }}</span><em v-if="selectedEventEvidence.length === 0">暂无时效或事件控制证据</em></div>
+          <div class="vtl-action-evidence"><small>评分指标</small><span v-for="item in selectedEventEvidence" :key="item">{{ item }}</span><em v-if="selectedEventEvidence.length === 0">暂无时效或事件控制指标</em></div>
         </article>
       </section>
 
@@ -587,7 +587,7 @@ function jumpToVtlSection(selector: string) {
 
       <section class="action-decision-log"><header><strong>应急处置决策</strong><span>{{ workspace?.actions.length ?? 0 }}</span></header><ol><li v-for="action in [...(workspace?.actions ?? [])].reverse().slice(0, 8)" :key="action.id"><time>{{ formatDuration(action.simulationTimeMs) }}</time><div><strong>{{ actionLabel(action.actionCode) }}</strong><small>{{ actionResultMessage(action.result) }}</small><template v-if="runtimeActionReasoning(action.payload)"><span>发现：{{ runtimeActionReasoning(action.payload)?.observation }}</span><span>判断：{{ runtimeActionReasoning(action.payload)?.rationale }}</span><span>预期：{{ runtimeActionReasoning(action.payload)?.expectedOutcome }}</span></template></div></li></ol><p v-if="!workspace?.actions.length">暂无处置决策</p></section>
       <section class="reorganization-log"><header><strong>动态集群重组</strong><span>{{ workspace?.reorganizations.length ?? 0 }}</span></header><ol><li v-for="record in [...(workspace?.reorganizations ?? [])].reverse().slice(0, 8)" :key="record.id"><time>{{ formatDuration(record.executedAtMs) }}</time><div><strong>{{ actionLabel(record.action) }}</strong><small>{{ record.message }}</small></div><CircleCheck v-if="record.checkPassed" /></li></ol><p v-if="!workspace?.reorganizations.length">暂无重组记录</p></section>
-      <button v-if="canCompleteEmergency" type="button" class="complete-emergency" :disabled="loading" :aria-busy="loading" @click="completeEmergency"><CircleCheck />{{ loading ? '正在进入复盘...' : '完成事件处置并进入复盘' }}</button>
+      <button v-if="canCompleteEmergency" type="button" class="complete-emergency" :disabled="loading" :aria-busy="loading" @click="completeEmergency"><CircleCheck />{{ loading ? '正在进入总结...' : '完成事件处置并进入总结' }}</button>
     </aside>
   </section>
 </template>

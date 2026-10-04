@@ -18,7 +18,7 @@ export function showEventBriefing(event: ShowRuntimeEventView, recommendedAction
     role: profile?.role ?? runtimeEventSource("CITY_SHOW", event.category, event.code),
     request: event.detail,
     impact,
-    objective: profile?.objective ?? "控制运行风险，保护机群与地面安全，并保持处置过程可追溯。",
+    objective: profile?.objective ?? "控制运行风险，保护机群与地面安全，并保持处置记录完整。",
     successCriteria: `在处置时限内执行“${recommendedAction}”或其他有效方案，控制事件并说明对编队和节目运行的影响。`,
     scoringEvidence: [...(profile?.scoringEvidence ?? ["风险识别"]), "响应时效", "动作匹配", "事件控制", "决策说明"]
   }
@@ -60,7 +60,7 @@ const profiles: Partial<Record<ShowRuntimeEventView["category"], Pick<ShowEventB
   },
   AIRCRAFT_DEVICE: {
     role: "机队设备监控系统",
-    objective: "让异常单机安全退出，识别形成的编队缺口，并复核图案完整性、动作时序和邻机安全间距。",
-    scoringEvidence: ["单机安全退出", "编队缺口识别", "图案完整性", "动作时序", "邻机安全复核"]
+    objective: "让异常单机安全退出，识别形成的编队缺口，并检查图案完整性、动作时序和邻机安全间距。",
+    scoringEvidence: ["单机安全退出", "编队缺口识别", "图案完整性", "动作时序", "邻机安全间隔检查"]
   }
 }

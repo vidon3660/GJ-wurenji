@@ -21,14 +21,14 @@ describe("project activity presentation", () => {
     ["LOGISTICS_SCHEDULE_BATCH_ADJUSTED", {}, { orderCount: 6, takeoffShiftMs: 300000 }, "6 条任务 · +5 分钟 时刻偏移"],
     ["LOGISTICS_SCHEDULE_BATCH_ADJUSTED", {}, { orderCount: 2, takeoffShiftMs: -600000 }, "2 条任务 · -10 分钟 时刻偏移"],
     ["LOGISTICS_RUNTIME_EVENT_RESOLVED", {}, { eventSubtype: "WIND_GUST" }, "WIND_GUST · 已控制"],
-    ["QUESTION_ATTEMPT_REGRADED", {}, { autoScore: 30, pendingCount: 0 }, "自动得分 30 · 待证据 0 题"],
+    ["QUESTION_ATTEMPT_REGRADED", {}, { autoScore: 30, pendingCount: 0 }, "指标得分 30 · 待生成 0 项"],
     ["REPORT_GENERATED", {}, { format: "PDF", filename: "项目报告.pdf" }, "PDF · 项目报告.pdf"]
   ] as const)("summarizes %s with its business evidence", (eventType, payload, result, expected) => {
     expect(projectActivitySummary(activity(eventType, payload, result))).toBe(expected)
   })
 
   it("uses a nonempty deterministic fallback", () => {
-    expect(projectActivitySummary(activity("ASSIGNMENT_ARCHIVED", {}, {}))).toBe("关键操作已留痕")
+    expect(projectActivitySummary(activity("ASSIGNMENT_ARCHIVED", {}, {}))).toBe("关键操作已记录")
   })
 })
 

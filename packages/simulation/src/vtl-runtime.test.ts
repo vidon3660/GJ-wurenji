@@ -110,6 +110,31 @@ describe("VTL runtime model", () => {
     expect(result.fleetIssues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "ROUTE_TASK_MISSING", taskObjectIds: ["task-1"] })]))
   })
 
+  it("blocks a route that crosses a published building volume", () => {
+    const computed = route()
+    const result = validateVtlPlan({
+      projectId: "project-1",
+      allocationRevision: 1,
+      routes: [computed],
+      assignments: [{ aircraftId: "aircraft-1", aircraftCode: "VTL-01", groupId: "group-1", available: true, taskObjectIds: ["task-1"], taskSequence: ["task-1"], estimatedDurationSeconds: computed.totalDurationSeconds }],
+      taskObjects: [{ id: "task-1", code: "T-01", title: "目标", type: "POINT", positions: [{ longitude: 0.012, latitude: 0, altitudeMeters: 120 }], requirement: "观察", completionRule: "覆盖", required: true, status: "ASSIGNED", estimatedWorkSeconds: 90, incompleteReason: null }],
+      parameters,
+      mainLandingSiteId: "main-1",
+      availableAlternateLandingSiteIds: ["alt-1"],
+      environmentFeatures: [{
+        id: "building-1",
+        name: "教学楼 A",
+        geometryType: "POLYGON",
+        positions: [{ longitude: 0.004, latitude: -0.0002 }, { longitude: 0.006, latitude: -0.0002 }, { longitude: 0.006, latitude: 0.0002 }, { longitude: 0.004, latitude: 0.0002 }],
+        heightMeters: 150,
+        properties: {},
+        kind: "BUILDING"
+      }]
+    })
+    expect(result.passed).toBe(false)
+    expect(result.singleAircraftIssues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "BUILDING_COLLISION", category: "SPATIAL", severity: "CONFLICT" })]))
+  })
+
   it("detects a timed multi-aircraft separation conflict", () => {
     const firstRoute = route()
     const secondRoute: VtlRoutePlanView = {

@@ -82,7 +82,7 @@ const profiles: Record<VtlRuntimeEventView["category"], Pick<VtlEventBriefing, "
   },
   TASK_CONDITION: {
     role: "巡检任务管理系统",
-    objective: "根据巡检对象条件变化调整任务分配，保持巡检结果完整且过程可追溯。",
+    objective: "根据巡检对象条件变化调整任务分配，保持巡检结果完整且过程记录完整。",
     scoringEvidence: ["巡检完整性"]
   }
 }

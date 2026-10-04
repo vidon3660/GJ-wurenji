@@ -76,6 +76,7 @@ import { vtlMapReadinessPresentation } from "../vtl-map-readiness-presentation"
 import { normalizeVtlStageSelection } from "../vtl-stage-selection"
 import { assignmentPreflightTargetSelector, firstPreflightFocusable, shouldInvalidateAssignmentPreview } from "../assignment-preflight-focus"
 import { assignmentPlanVersion, mapResourceVersion, publishedScenarioOverlayVersions, scenarioOverlayResourceVersion } from "../assignment-overlay"
+import { defaultQuestionBankForScene } from "../question-bank-defaults"
 import V3OperationProgress from "./V3OperationProgress.vue"
 
 const props = withDefaults(defineProps<{
@@ -466,7 +467,7 @@ const continueHint = computed(() => {
   if (step.value === 0) return "请补充任务名称、项目背景、任务说明和完成要求。"
   if (step.value === 1) {
     if (!regionPackageId.value || !scaleTemplateCode.value) return "请选择固定规模模板和预设教学区域。"
-    if (questionBankSelectionInvalid.value) return "当前题库版本不可用，请重新选择已发布版本或清空绑定。"
+    if (questionBankSelectionInvalid.value) return "当前场景任务版本不可用，请重新选择已发布版本或清空绑定。"
     if (sceneType.value === "CITY_SHOW" && !showProgramCompatible.value) return "表演程序与当前机群规模不匹配，请重新选择。"
     if (sceneType.value === "CITY_LOGISTICS" && !logisticsCandidatesValid.value) return "请按模板要求冻结有效配送点。"
   }
@@ -496,7 +497,7 @@ async function loadQuestionBanks(signal?: AbortSignal): Promise<QuestionBankSumm
   try {
     return await api<QuestionBankSummary[]>("/v1/education/question-banks", signal ? { signal } : undefined)
   } catch (error) {
-    questionBankError.value = error instanceof Error ? error.message : "题库列表加载失败"
+    questionBankError.value = error instanceof Error ? error.message : "场景任务列表加载失败"
     return []
   }
 }
@@ -788,6 +789,14 @@ function applySceneDefaults() {
   }
   if (!sceneRegions.value.some((region) => region.packageId === regionPackageId.value)) regionPackageId.value = sceneRegions.value[0]?.packageId ?? ""
   scaleTemplateCode.value = scaleOptions.value[0]?.code ?? ""
+  // Every built-in scene ships with a reviewed question bank. Attach it to a
+  // new assignment by default so students receive the scenario questions as
+  // soon as the teacher publishes the task. Teachers can still clear or
+  // replace the binding when creating a custom exercise.
+  const defaultBank = defaultQuestionBankForScene(questionBanks.value, sceneType.value)
+  if (!questionBankVersionId.value || !compatibleQuestionBanks.value.some((bank) => bank.publishedVersionId === questionBankVersionId.value)) {
+    questionBankVersionId.value = defaultBank?.publishedVersionId ?? ""
+  }
   scenarioOverlayVersionId.value = ""
   showProgramPackageId.value = null
   eventCodes.value = []
@@ -1537,7 +1546,7 @@ function defaultVtlEvaluationItems(): VtlEvaluationItemConfig[] {
     { code: "EXECUTION_PLAN", label: "检查与执行计划", maxScore: 15 },
     { code: "RUNTIME_MONITORING", label: "三级态势与运行观察", maxScore: 15 },
     { code: "EMERGENCY_REORGANIZATION", label: "事件处置与集群重组", maxScore: 10 },
-    { code: "REVIEW_QUALITY", label: "巡检复盘质量", maxScore: 10 }
+    { code: "REVIEW_QUALITY", label: "巡检总结质量", maxScore: 10 }
   ]
 }
 
@@ -1655,12 +1664,12 @@ function className() {
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="作答题库（可选）" data-preflight-target="question-bank">
-            <el-select v-model="questionBankVersionId" aria-label="作答题库" clearable filterable placeholder="不绑定题库">
+          <el-form-item label="方案任务规则（可选）" data-preflight-target="question-bank">
+            <el-select v-model="questionBankVersionId" aria-label="方案任务规则" clearable filterable placeholder="不绑定任务规则">
               <el-option
                 v-for="bank in compatibleQuestionBanks"
                 :key="bank.publishedVersionId ?? bank.id"
-                :label="`${bank.title} · V${bank.publishedVersion?.version ?? bank.currentVersion} · ${bank.publishedVersion?.questionCount ?? bank.questionCount} 题`"
+                :label="`${bank.title} · V${bank.publishedVersion?.version ?? bank.currentVersion} · ${bank.publishedVersion?.questionCount ?? bank.questionCount} 项`"
                 :value="bank.publishedVersionId ?? ''"
               />
             </el-select>
@@ -1674,12 +1683,12 @@ function className() {
           <span>当前场景自动匹配 {{ selectedResourceIds().length }} 个已启用资源包</span>
           <small>缺少规则、机型、事件或评价量表时，需由管理员在资源管理中激活对应资源后重新检查。</small>
         </div>
-        <div v-if="questionBankError" class="wizard-inline-warning"><el-icon><WarningFilled /></el-icon><span>题库列表暂时不可用：{{ questionBankError }}。不绑定题库仍可继续创建任务。</span><el-button text size="small" :loading="loading" @click="retryQuestionBanks">重新加载题库</el-button></div>
-        <div v-else-if="questionBankSelectionInvalid" class="wizard-inline-warning"><el-icon><WarningFilled /></el-icon><span>当前任务绑定的题库版本不可用，请重新选择已发布版本或清空题库绑定。</span></div>
+        <div v-if="questionBankError" class="wizard-inline-warning"><el-icon><WarningFilled /></el-icon><span>场景任务列表暂时不可用：{{ questionBankError }}。不绑定任务规则仍可继续创建任务。</span><el-button text size="small" :loading="loading" @click="retryQuestionBanks">重新加载场景任务</el-button></div>
+        <div v-else-if="questionBankSelectionInvalid" class="wizard-inline-warning"><el-icon><WarningFilled /></el-icon><span>当前任务绑定的场景任务版本不可用，请重新选择已发布版本或清空任务规则绑定。</span></div>
         <div v-else-if="selectedQuestionBank" class="wizard-region-summary question-bank-summary">
           <strong>{{ selectedQuestionBank.title }} · V{{ selectedQuestionBank.publishedVersion?.version ?? selectedQuestionBank.currentVersion }}</strong>
-          <span>学生将在项目工作区完成 {{ selectedQuestionBank.publishedVersion?.questionCount ?? selectedQuestionBank.questionCount }} 道题，仿真证据题由服务端指标判定。</span>
-          <small>题库版本将在发布快照中固化，发布后不可替换。</small>
+          <span>学生将在项目工作区提交 {{ selectedQuestionBank.publishedVersion?.questionCount ?? selectedQuestionBank.questionCount }} 项方案要求，仿真指标由服务端计算。</span>
+          <small>场景任务版本将在发布快照中固化，发布后不可替换。</small>
         </div>
         <div v-if="sceneRegions.find((region) => region.packageId === regionPackageId)" class="wizard-region-summary" data-preflight-target="map-resource" tabindex="-1">
           <strong>{{ regionTitle() }}</strong>
@@ -1939,7 +1948,7 @@ function className() {
             <div v-if="classroomId && classStudents.length === 0" class="compact-empty">该班级暂无学生</div>
           </div>
         </div>
-        <div class="publish-policy-note"><strong>{{ mode === 'TRAINING' ? '训练模式反馈策略' : '考核模式反馈策略' }}</strong><span>{{ mode === 'TRAINING' ? '学生可查看完整检查结果和复盘信息。' : '学生仅查看总分，过程错误和量表维度在结果发布前隐藏。' }}</span></div>
+        <div class="publish-policy-note"><strong>{{ mode === 'TRAINING' ? '训练模式反馈策略' : '考核模式反馈策略' }}</strong><span>{{ mode === 'TRAINING' ? '学生可查看完整检查结果和运行总结。' : '学生仅查看总分，过程错误和量表维度在结果发布前隐藏。' }}</span></div>
       </section>
 
       <section v-else class="wizard-panel preview-panel">
@@ -1999,7 +2008,7 @@ function className() {
         <dl class="preview-summary">
           <div><dt>任务</dt><dd>{{ title }}</dd></div><div><dt>场景 / 模式</dt><dd>{{ sceneLabel(sceneType) }} / {{ mode === 'TRAINING' ? '训练' : '考核' }}</dd></div>
           <div v-if="mode === 'ASSESSMENT'"><dt>考核时长</dt><dd>{{ assessmentDurationMinutes }} 分钟</dd></div>
-          <div><dt>模板 / 区域</dt><dd>{{ formatScaleTemplateCode(scaleTemplateCode) }} / {{ regionTitle() }}</dd></div><div><dt>作答题库</dt><dd>{{ selectedQuestionBank ? `${selectedQuestionBank.title} · V${selectedQuestionBank.publishedVersion?.version ?? selectedQuestionBank.currentVersion} · ${selectedQuestionBank.publishedVersion?.questionCount ?? selectedQuestionBank.questionCount} 题` : questionBankVersionId ? '绑定版本不可用' : '未绑定题库' }}</dd></div><div><dt>发布范围</dt><dd>{{ className() }} · {{ preview?.studentCount ?? 0 }} 名学生</dd></div>
+          <div><dt>模板 / 区域</dt><dd>{{ formatScaleTemplateCode(scaleTemplateCode) }} / {{ regionTitle() }}</dd></div><div><dt>方案任务规则</dt><dd>{{ selectedQuestionBank ? `${selectedQuestionBank.title} · V${selectedQuestionBank.publishedVersion?.version ?? selectedQuestionBank.currentVersion} · ${selectedQuestionBank.publishedVersion?.questionCount ?? selectedQuestionBank.questionCount} 项` : questionBankVersionId ? '绑定版本不可用' : '未绑定任务规则' }}</dd></div><div><dt>发布范围</dt><dd>{{ className() }} · {{ preview?.studentCount ?? 0 }} 名学生</dd></div>
           <div><dt>场景覆盖层</dt><dd>{{ selectedPublishedScenarioOverlay ? `${selectedPublishedScenarioOverlay.title} · V${selectedPublishedScenarioOverlay.versionNo}` : scenarioOverlayVersionId ? '绑定版本不可用' : '未绑定覆盖层' }}</dd></div>
           <div><dt>事件</dt><dd>{{ eventCodes.length ? (sceneType === 'CITY_LOGISTICS' ? configuredLogisticsEventSummary() : `${eventCodes.length} 类系统模拟事件`) : '不注入事件' }}</dd></div><div><dt>资源版本</dt><dd>{{ preview?.resourceRefs.length ?? 0 }} 个已校验资源包</dd></div>
           <div><dt>冻结引用</dt><dd class="preview-version-list"><span>地图 {{ frozenMapResourceVersion }}</span><span>场景 {{ frozenSceneResourceVersion }}</span><span>方案 {{ frozenPlanVersion }}</span></dd></div>

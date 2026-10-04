@@ -26,7 +26,7 @@ export function simulationEntryStatus(stage: StudentProjectStageView | null | un
   if (stage.status === "LOCKED") return stage.openCondition ? `待开放 · ${stage.openCondition}` : "待开放 · 完成前置阶段后开放"
   if (stage.status === "AVAILABLE") return "可进入"
   if (stage.status === "IN_PROGRESS" || stage.status === "RETURNED") return "运行中"
-  if (stage.status === "SUBMITTED") return "待复核"
+  if (stage.status === "SUBMITTED") return "待评分"
   return "已完成"
 }
 

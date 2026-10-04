@@ -555,9 +555,17 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
   const routePassed = sources.validation?.status === "PASSED" || sources.validation?.status === "WITH_RISK"
   const schedulePassed = Boolean(sources.schedule?.checkResult.submittable)
   const dynamicCount = currentAttemptActivities(sources).filter((item) => item.eventType === "LOGISTICS_DYNAMIC_SCHEDULE_SUBMITTED").length
+  const strictMetrics = computeLogisticsSimulationMetrics(sources)
   return [
     metric("ROUTE_VALIDATION", "航线验证", routePassed ? "通过" : "待复核", null, routePassed ? "PASS" : "RISK", sources.validation ? `第 ${sources.validation.attemptNo} 次验证，${sources.validation.status}` : "尚未找到验证记录"),
     metric("SCHEDULE_QUALITY", "调度方案质量", schedulePassed ? "可执行" : "存在冲突", null, schedulePassed ? "PASS" : "RISK", sources.schedule ? `V${sources.schedule.versionNo}，${sources.schedule.checkResult.conflictCount} 个硬冲突` : "尚未提交正式调度"),
+    strictMetrics.flightTime,
+    strictMetrics.buildingCollision,
+    strictMetrics.spaceConflict,
+    strictMetrics.airConflict,
+    strictMetrics.performanceLimit,
+    strictMetrics.energyReserve,
+    strictMetrics.energyConsumption,
     metric("ORDER_COMPLETION", "订单完成率", ratio(completedOrders, orders.length) * 100, "%", completedOrders === orders.length && orders.length > 0 ? "PASS" : "RISK", `${completedOrders}/${orders.length} 单完成，${failedOrders} 单失败`),
     metric("ON_TIME_DELIVERY", "准时到达率", logisticsOnTimeRate(onTime, completedOrders, delayedOrders) * 100, "%", onTime === completedOrders + delayedOrders && completedOrders + delayedOrders > 0 ? "PASS" : "RISK", `${onTime}/${completedOrders + delayedOrders} 个已完成或延误订单在时间窗内`),
     metric("RISK_IDENTIFICATION", "告警发现率", ratio(discovered.length, triggered.length) * 100, "%", triggered.length === 0 || discovered.length === triggered.length ? "PASS" : "RISK", `${discovered.length}/${triggered.length} 个运行事件已发现`),
@@ -566,6 +574,116 @@ function computeObjectiveMetrics(sources: LogisticsReviewSources): ShowObjective
     metric("EVENT_CONTROL", "事件控制率", ratio(controlled.length, triggered.length) * 100, "%", triggered.length === 0 || controlled.length === triggered.length ? "PASS" : "RISK", `${controlled.length}/${triggered.length} 个运行事件已控制或结束`),
     metric("DYNAMIC_RESCHEDULE", "动态重调度", dynamicCount, "次", dynamicCount > 0 || triggered.length === 0 ? "PASS" : "INFO", dynamicCount ? `已提交 ${dynamicCount} 个动态调度版本` : delayedOrders ? "存在延误订单但未提交动态重调度" : "运行中未触发重调度场景")
   ]
+}
+
+/**
+ * Derive review metrics from persisted route validation, schedule checks and
+ * runtime snapshots. These values intentionally remain unavailable until the
+ * corresponding simulation record exists; a zero would imply a successful
+ * check that has not actually been run.
+ */
+function computeLogisticsSimulationMetrics(sources: LogisticsReviewSources): {
+  flightTime: ShowObjectiveMetricView
+  buildingCollision: ShowObjectiveMetricView
+  spaceConflict: ShowObjectiveMetricView
+  airConflict: ShowObjectiveMetricView
+  performanceLimit: ShowObjectiveMetricView
+  energyReserve: ShowObjectiveMetricView
+  energyConsumption: ShowObjectiveMetricView
+} {
+  const validation = sources.validation?.result ?? null
+  const validationEvidence = validation?.evidence ?? []
+  const scheduleCheck = sources.schedule?.checkResult ?? null
+  const scheduleEvidence = scheduleCheck?.evidence ?? []
+  const latestProjection = sources.snapshots.at(-1)?.projection
+
+  const missionDurations = sources.scheduleItems
+    .map((item) => (Number.isFinite(item.arrivalTimeMs) && Number.isFinite(item.plannedTakeoffTimeMs) && Number.isFinite(item.landingTimeMs) && Number.isFinite(item.returnStartTimeMs)
+      ? ((item.arrivalTimeMs - item.plannedTakeoffTimeMs) + (item.landingTimeMs - item.returnStartTimeMs)) / 1_000
+      : null))
+    .filter((value): value is number => value !== null && value >= 0)
+  const runtimeDurations = (latestProjection?.tasks ?? [])
+    .map((task) => (Number.isFinite(task.arrivalTimeMs) && Number.isFinite(task.plannedTakeoffTimeMs) && Number.isFinite(task.landingTimeMs) && Number.isFinite(task.returnStartTimeMs)
+      ? ((task.arrivalTimeMs - task.plannedTakeoffTimeMs) + (task.landingTimeMs - task.returnStartTimeMs)) / 1_000
+      : null))
+    .filter((value): value is number => value !== null && value >= 0)
+  const validatedDurations = (validation?.roundTripMetrics ?? [])
+    .map((item) => Number(item.flightTimeSeconds))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+  const durations = runtimeDurations.length > 0 ? runtimeDurations : missionDurations.length > 0 ? missionDurations : validatedDurations
+  const maxFlightTime = durations.length > 0 ? Math.max(...durations) : null
+
+  const buildingEvidence = validationEvidence.filter((item) => /^(BUILDING|OBSTACLE)_/.test(item.code) || item.code === "RESTRICTED_AREA_CROSSING")
+  const spatialEvidence = validationEvidence.filter((item) => item.category === "SPATIAL" || item.code === "MULTI_ROUTE_CROSSING")
+  const airConflictEvidence = scheduleEvidence.filter((item) => ["STRICT_SERIAL_VIOLATION", "SHARED_ROUTE_CONFLICT", "CROSSING_ROUTE_RISK"].includes(item.code))
+  const performanceEvidence = [
+    ...validationEvidence.filter((item) => item.category === "AIRCRAFT"),
+    ...scheduleEvidence.filter((item) => item.category === "AIRCRAFT")
+  ]
+  const energyReserveValues = sources.scheduleItems
+    .map((item) => Number(item.batteryAfterMissionPercent))
+    .filter((value) => Number.isFinite(value))
+  const validatedReserveValues = (validation?.roundTripMetrics ?? [])
+    .map((item) => Number(item.remainingBatteryPercent))
+    .filter((value) => Number.isFinite(value))
+  const runtimeCompletedTasks = (latestProjection?.tasks ?? []).filter((task) => ["AVAILABLE_AGAIN", "FAILED", "CANCELLED"].includes(task.status))
+  const runtimeReserveValues = runtimeCompletedTasks
+    .map((task) => Number(task.batteryPercent))
+    .filter((value) => Number.isFinite(value))
+  const reserveValues = runtimeReserveValues.length > 0 ? runtimeReserveValues : energyReserveValues.length > 0 ? energyReserveValues : validatedReserveValues
+  const minimumReserve = reserveValues.length > 0 ? Math.min(...reserveValues) : null
+  const validatedConsumptionValues = (validation?.roundTripMetrics ?? [])
+    .map((item) => Number(item.batteryConsumptionPercent))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+  const scheduleConsumptionValues = (sources.schedule?.items ?? [])
+    .map((item) => {
+      const initial = Number(item.aircraft?.initialBatteryPercent)
+      const remaining = Number(item.batteryAfterMissionPercent)
+      return Number.isFinite(initial) && Number.isFinite(remaining) ? Math.max(0, initial - remaining) : null
+    })
+    .filter((value): value is number => value !== null)
+  const runtimeConsumptionValues = runtimeCompletedTasks
+    .map((task) => {
+      const scheduleItem = sources.schedule?.items?.find((item) => item.itemKey === task.scheduleItemId)
+      const initial = Number(scheduleItem?.aircraft?.initialBatteryPercent)
+      const remaining = Number(task.batteryPercent)
+      return Number.isFinite(initial) && Number.isFinite(remaining) ? Math.max(0, initial - remaining) : null
+    })
+    .filter((value): value is number => value !== null)
+  const consumptionValues = runtimeConsumptionValues.length > 0
+    ? runtimeConsumptionValues
+    : validatedConsumptionValues.length > 0
+      ? validatedConsumptionValues
+      : scheduleConsumptionValues
+  const averageConsumption = consumptionValues.length > 0
+    ? consumptionValues.reduce((sum, value) => sum + value, 0) / consumptionValues.length
+    : null
+
+  const noRun = (code: string, label = code): ShowObjectiveMetricView => metric(code, label, "—", null, "INFO", "尚未完成对应仿真计算")
+  const countMetric = (
+    code: string,
+    label: string,
+    count: number,
+    sourceExists: boolean,
+    detail: string,
+    riskCount = 0
+  ): ShowObjectiveMetricView => metric(code, label, sourceExists ? count : "—", sourceExists ? "项" : null, sourceExists ? (count === 0 && riskCount === 0 ? "PASS" : "RISK") : "INFO", sourceExists ? detail : "尚未完成对应仿真计算")
+
+  return {
+    flightTime: maxFlightTime === null
+      ? noRun("FLIGHT_TIME", "最大往返飞行时间")
+      : metric("FLIGHT_TIME", "最大往返飞行时间", maxFlightTime, "秒", "INFO", `根据 ${durations.length} 个已计算任务的计划航段时长`),
+    buildingCollision: countMetric("BUILDING_COLLISION", "建筑物与禁限飞冲突", buildingEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation), `${buildingEvidence.length} 项建筑物、障碍物或禁限飞区空间检查记录`),
+    spaceConflict: countMetric("SPACE_CONFLICT", "航线空间冲突", spatialEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation), `${spatialEvidence.length} 项航线空间关系检查记录`),
+    airConflict: countMetric("AIR_CONFLICT", "空中交通冲突", airConflictEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(scheduleCheck), `${airConflictEvidence.length} 项调度时段与航线关系检查记录`, airConflictEvidence.filter((item) => item.severity === "RISK").length),
+    performanceLimit: countMetric("PERFORMANCE_LIMIT", "机型性能限制", performanceEvidence.filter((item) => item.severity === "CONFLICT").length, Boolean(validation || scheduleCheck), `${performanceEvidence.length} 项高度、速度、航程或可用性检查记录`),
+    energyReserve: minimumReserve === null
+      ? noRun("ENERGY_RESERVE", "任务结束最低剩余电量")
+      : metric("ENERGY_RESERVE", "任务结束最低剩余电量", minimumReserve, "%", minimumReserve >= 20 ? "PASS" : "RISK", `根据 ${reserveValues.length} 个任务的电量结果，安全余量阈值 20%`),
+    energyConsumption: averageConsumption === null
+      ? noRun("ENERGY_CONSUMPTION", "平均任务电量消耗")
+      : metric("ENERGY_CONSUMPTION", "平均任务电量消耗", averageConsumption, "%", "INFO", `根据 ${consumptionValues.length} 个任务的往返能耗结果计算`)
+  }
 }
 
 function buildTimeline(sources: LogisticsReviewSources): ShowReplayTimelineItemView[] {

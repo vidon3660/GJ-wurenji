@@ -58,8 +58,8 @@ const phaseDefinitions: ReadonlyArray<Pick<StudentWorkspacePhaseView, "key" | "l
   },
   {
     key: "REVIEW",
-    label: "复盘",
-    description: "查看运行证据并完成复盘评价。",
+    label: "运行评估",
+    description: "查看运行指标和事件记录，完成运行总结。",
     stageCodes: ["SHOW_REVIEW", "LOGISTICS_REVIEW", "VTL_REVIEW"]
   }
 ]

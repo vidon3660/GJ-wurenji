@@ -148,7 +148,7 @@ async function openVersionComparison() {
     comparisonEditorConfigs.value = { baseline, target }
     comparisonEditorVisible.value = true
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "历史版本审阅会话创建失败")
+    ElMessage.error(error instanceof Error ? error.message : "历史版本查看会话创建失败")
   } finally {
     loading.value = false
   }
@@ -214,10 +214,10 @@ async function teacherReview(target: "viewed" | "return") {
       method: "POST",
       body: JSON.stringify({ comment: reviewComment.value, score: reviewScore.value })
     })
-    ElMessage.success(target === "return" ? "材料已退回修改" : "教师查看已记录")
+    ElMessage.success(target === "return" ? "材料已退回修改" : "教师查看记录已保存")
     emit("refreshProject")
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "材料审核失败")
+    ElMessage.error(error instanceof Error ? error.message : "材料确认失败")
   } finally {
     loading.value = false
   }
@@ -281,8 +281,8 @@ function formatTime(value: string | null) {
     </aside>
 
     <main class="document-stage" :class="{ 'teacher-view': !isStudent }">
-      <div v-if="loadError && !workspace" class="document-load-error document-load-error-full" role="alert" aria-live="assertive"><span><strong>飞行申报材料加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的材料和审核记录，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="workspaceLoading" @click="loadWorkspace">重新加载材料</el-button></div>
-      <div v-if="loadError && workspace" class="document-load-error" role="alert" aria-live="assertive"><span><strong>材料数据同步失败</strong><small>{{ loadError }}</small><p>当前材料、版本和审核记录已保留，继续编辑或提交前请先重试同步。</p></span><el-button type="warning" :icon="Refresh" :loading="workspaceLoading" @click="loadWorkspace">重试同步</el-button></div>
+      <div v-if="loadError && !workspace" class="document-load-error document-load-error-full" role="alert" aria-live="assertive"><span><strong>飞行申报材料加载失败</strong><small>{{ loadError }}</small><p>当前没有可保留的材料和教师意见记录，请检查连接后重新加载。</p></span><el-button type="primary" :icon="Refresh" :loading="workspaceLoading" @click="loadWorkspace">重新加载材料</el-button></div>
+      <div v-if="loadError && workspace" class="document-load-error" role="alert" aria-live="assertive"><span><strong>材料数据同步失败</strong><small>{{ loadError }}</small><p>当前材料、版本和教师意见记录已保留，继续编辑或提交前请先重试同步。</p></span><el-button type="warning" :icon="Refresh" :loading="workspaceLoading" @click="loadWorkspace">重试同步</el-button></div>
       <section v-if="isStudent" class="document-submission-state" :class="{ complete: workspace?.allRequiredSubmitted }">
         <el-icon><Check v-if="workspace?.allRequiredSubmitted" /><Clock v-else /></el-icon>
         <div>
@@ -302,7 +302,7 @@ function formatTime(value: string | null) {
       <section v-if="!isStudent" class="teacher-evidence-banner">
         <el-icon><Check /></el-icon>
         <strong>{{ teacherSubmittedCount }} / {{ workspace?.documents.length ?? 3 }} 已提交</strong>
-        <span>可对比历史提交证据并人工审阅 Word 内容。系统只核验是否提交，不自动判断内容正确性或完整性。</span>
+        <span>可对比历史提交记录并查看 Word 内容。系统只核验是否提交，不自动判断内容正确性或完整性。</span>
       </section>
 
       <div v-if="selectedDocument" class="document-body">
@@ -322,10 +322,10 @@ function formatTime(value: string | null) {
         <section v-if="!isStudent && selectedDocument.versions.length > 1" class="document-version-comparison" aria-label="申报材料历史版本对比">
           <header>
             <div><span>版本对比</span><strong>历史提交版本对比</strong></div>
-            <small>文件证据与审核记录</small>
+            <small>文件提交记录与教师意见</small>
           </header>
           <div class="version-compare-selectors">
-            <label><span>基线版本</span><el-select v-model="comparisonBaselineId" aria-label="选择基线版本"><el-option v-for="version in selectedDocument.versions" :key="version.id" :label="`V${version.versionNo} · ${showDocumentSubmissionLabel(selectedDocument, version.versionNo)}`" :value="version.id" :disabled="version.id === comparisonTargetId" /></el-select></label>
+            <label><span>参考版本</span><el-select v-model="comparisonBaselineId" aria-label="选择参考版本"><el-option v-for="version in selectedDocument.versions" :key="version.id" :label="`V${version.versionNo} · ${showDocumentSubmissionLabel(selectedDocument, version.versionNo)}`" :value="version.id" :disabled="version.id === comparisonTargetId" /></el-select></label>
             <label><span>目标版本</span><el-select v-model="comparisonTargetId" aria-label="选择目标版本"><el-option v-for="version in selectedDocument.versions" :key="version.id" :label="`V${version.versionNo} · ${showDocumentSubmissionLabel(selectedDocument, version.versionNo)}`" :value="version.id" :disabled="version.id === comparisonBaselineId" /></el-select></label>
           </div>
           <template v-if="versionComparison">
@@ -342,25 +342,25 @@ function formatTime(value: string | null) {
                 <ul v-if="selectedDocument.reviews.some(review => review.versionNo === version.versionNo)">
                   <li v-for="review in selectedDocument.reviews.filter(item => item.versionNo === version.versionNo)" :key="review.id"><strong>{{ reviewActionLabel(review.action) }}</strong><span>{{ review.comment || '无文字意见' }}</span><small>{{ review.reviewedBy }} · {{ formatTime(review.createdAt) }}</small></li>
                 </ul>
-                <p v-else>该提交版本暂无教师审核记录。</p>
+                <p v-else>该提交版本暂无教师意见记录。</p>
               </article>
             </div>
             <footer>
               <div><strong>{{ versionComparison.sameContent ? '文件内容哈希一致' : '文件内容哈希不同' }}</strong><span>目标版本大小 {{ formatSizeDelta(versionComparison.sizeDeltaBytes) }}；内容差异由教师在只读 Word 中人工判断。</span></div>
-              <el-button type="primary" :icon="View" @click="openVersionComparison">并排审阅 Word</el-button>
+              <el-button type="primary" :icon="View" @click="openVersionComparison">并排查看 Word</el-button>
             </footer>
           </template>
         </section>
 
-        <section class="document-audit" aria-label="材料审核与重提记录">
-          <header><div><strong>审核与重提记录</strong></div><small>{{ auditTimeline.length }} 条留痕</small></header>
+        <section class="document-audit" aria-label="材料提交与退回记录">
+          <header><div><strong>提交与退回记录</strong></div><small>{{ auditTimeline.length }} 条记录</small></header>
           <ol v-if="auditTimeline.length">
             <li v-for="entry in auditTimeline" :key="entry.id" :class="`audit-${entry.type.toLowerCase()}`">
               <i><el-icon><Warning v-if="entry.type === 'RETURNED'" /><Check v-else-if="entry.type === 'SUBMISSION'" /><View v-else /></el-icon></i>
               <div><div><strong>{{ entry.title }}</strong><span>关联 V{{ entry.versionNo }}</span></div><p v-if="entry.comment">{{ entry.comment }}</p><small>{{ entry.actor }} · {{ formatTime(entry.occurredAt) }}</small></div>
             </li>
           </ol>
-          <div v-else class="document-audit-empty"><el-icon><Clock /></el-icon><span>提交后将在这里形成审核留痕</span></div>
+          <div v-else class="document-audit-empty"><el-icon><Clock /></el-icon><span>提交后将在这里形成操作记录</span></div>
         </section>
       </div>
 
@@ -402,7 +402,7 @@ function formatTime(value: string | null) {
     </el-dialog>
 
     <el-dialog v-model="comparisonEditorVisible" width="min(1760px, calc(100vw - 20px))" top="2vh" class="onlyoffice-dialog comparison-editor-dialog" destroy-on-close @closed="closeVersionComparison">
-      <template #header><div class="onlyoffice-title"><strong>{{ selectedDocument?.title }} · 历史版本对比</strong><span>只读人工审阅</span></div></template>
+      <template #header><div class="onlyoffice-title"><strong>{{ selectedDocument?.title }} · 历史版本对比</strong><span>只读查看</span></div></template>
       <div v-if="comparisonEditorConfigs && versionComparison" class="comparison-editor-grid">
         <section><header><strong>V{{ versionComparison.baseline.versionNo }} · {{ showDocumentSubmissionLabel(selectedDocument!, versionComparison.baseline.versionNo) }}</strong><small>{{ formatTime(versionComparison.baseline.createdAt) }}</small></header><V3OnlyOfficeEditor :public-api-url="comparisonEditorConfigs.baseline.publicApiUrl" :config="comparisonEditorConfigs.baseline.config" @error="ElMessage.error($event)" /></section>
         <section><header><strong>V{{ versionComparison.target.versionNo }} · {{ showDocumentSubmissionLabel(selectedDocument!, versionComparison.target.versionNo) }}</strong><small>{{ formatTime(versionComparison.target.createdAt) }}</small></header><V3OnlyOfficeEditor :public-api-url="comparisonEditorConfigs.target.publicApiUrl" :config="comparisonEditorConfigs.target.config" @error="ElMessage.error($event)" /></section>

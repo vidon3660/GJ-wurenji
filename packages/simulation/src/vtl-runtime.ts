@@ -1,5 +1,6 @@
 import type {
   V3Coordinate,
+  V3RegionFeature,
   VtlAircraftParameters,
   VtlAircraftAssignmentView,
   VtlEnergySegmentView,
@@ -46,6 +47,10 @@ export interface VtlRouteComputationResult {
   issues: VtlPlanCheckIssueView[]
 }
 
+export interface VtlEnvironmentFeature extends Pick<V3RegionFeature, "id" | "name" | "geometryType" | "position" | "positions" | "heightMeters" | "properties"> {
+  kind?: "BUILDING" | "OBSTACLE" | "RESTRICTION"
+}
+
 export interface VtlPlanValidationInput {
   projectId: string
   allocationRevision: number
@@ -59,6 +64,8 @@ export interface VtlPlanValidationInput {
   horizontalSeparationMeters?: number
   verticalSeparationMeters?: number
   temporalSeparationSeconds?: number
+  /** 已发布区域中的建筑、障碍物和禁飞面；用于检查航段的三维净空。 */
+  environmentFeatures?: readonly VtlEnvironmentFeature[]
 }
 
 export interface VtlRuntimeInput {
@@ -68,6 +75,8 @@ export interface VtlRuntimeInput {
   groups: VtlGroupView[]
   taskObjects: VtlTaskObjectView[]
   events?: Array<{ id: string; aircraftIds: string[] }>
+  horizontalSeparationMeters?: number
+  verticalSeparationMeters?: number
 }
 
 export function vtlPhaseDefinitions(): readonly VtlFlightPhase[] {
@@ -129,7 +138,10 @@ export function buildVtlRoutePlan(input: VtlRouteComputationInput, now = new Dat
 }
 
 export function validateVtlPlan(input: VtlPlanValidationInput, checkedAt = new Date().toISOString()): VtlPlanCheckResultView {
-  const singleAircraftIssues = input.routes.flatMap((route) => validateRouteStructure(route, input.parameters))
+  const singleAircraftIssues = input.routes.flatMap((route) => [
+    ...validateRouteStructure(route, input.parameters),
+    ...validateRouteEnvironment(route, input.environmentFeatures ?? [])
+  ])
   const assignedObjects = new Map<string, string[]>()
   for (const assignment of input.assignments) {
     for (const taskObjectId of assignment.taskObjectIds) {
@@ -184,6 +196,123 @@ export function validateVtlPlan(input: VtlPlanValidationInput, checkedAt = new D
   }
 }
 
+function validateRouteEnvironment(route: VtlRoutePlanView, features: readonly VtlEnvironmentFeature[]): VtlPlanCheckIssueView[] {
+  if (features.length === 0 || route.waypoints.length < 2) return []
+  const issues: VtlPlanCheckIssueView[] = []
+  for (let segmentIndex = 0; segmentIndex < route.waypoints.length - 1; segmentIndex += 1) {
+    const start = route.waypoints[segmentIndex]!
+    const end = route.waypoints[segmentIndex + 1]!
+    const horizontalSegment = { start: start.position, end: end.position }
+    const minimumAltitude = Math.min(start.altitudeMeters, end.altitudeMeters)
+    const maximumAltitude = Math.max(start.altitudeMeters, end.altitudeMeters)
+    for (const feature of features) {
+      const kind = feature.kind ?? (feature.properties.category === "OBSTACLE" ? "OBSTACLE" : "BUILDING")
+      const horizontalHit = feature.geometryType === "POLYGON"
+        ? segmentIntersectsPolygon(horizontalSegment.start, horizontalSegment.end, feature.positions ?? [])
+        : feature.geometryType === "LINESTRING"
+          ? lineStringIntersectsSegment(horizontalSegment.start, horizontalSegment.end, feature.positions ?? [])
+          : feature.position
+            ? distancePointToSegmentMeters(feature.position, horizontalSegment.start, horizontalSegment.end) <= featureRadiusMeters(feature)
+            : false
+      if (!horizontalHit) continue
+      const baseHeight = featureBaseHeightMeters(feature)
+      const topHeight = baseHeight + featureHeightMeters(feature)
+      const verticalClearance = minimumAltitude - topHeight
+      const restricted = kind === "RESTRICTION"
+      const collides = restricted || maximumAltitude >= baseHeight && minimumAltitude <= topHeight
+      const near = !collides && verticalClearance < 20
+      if (!collides && !near) continue
+      const code = restricted ? "RESTRICTED_AIRSPACE_CROSSING" : kind === "OBSTACLE" ? "OBSTACLE_COLLISION" : "BUILDING_COLLISION"
+      const severity = collides ? "CONFLICT" : "RISK"
+      const detail = restricted
+        ? `航段 ${segmentIndex + 1} 穿越限制区域 ${feature.name || feature.id}`
+        : `${kind === "OBSTACLE" ? "障碍物" : "建筑物"} ${feature.name || feature.id} 与航段 ${segmentIndex + 1} 的三维净空不足`
+      issues.push(issue(code, "SPATIAL", severity, [route.aircraftId], [], detail, "调整航线位置或高度后重新执行方案检查。", `${route.id}:${feature.id}:${segmentIndex}`))
+    }
+  }
+  return issues
+}
+
+function featureBaseHeightMeters(feature: VtlEnvironmentFeature): number {
+  const value = feature.properties.baseHeightMeters ?? feature.properties.elevationMeters ?? feature.properties.elevation
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+function featureHeightMeters(feature: VtlEnvironmentFeature): number {
+  const value = feature.heightMeters ?? feature.properties.heightMeters ?? feature.properties.height
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : feature.kind === "RESTRICTION" ? Number.POSITIVE_INFINITY : 30
+}
+
+function featureRadiusMeters(feature: VtlEnvironmentFeature): number {
+  const value = feature.properties.radiusMeters ?? feature.properties.bufferMeters
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(1, value) : feature.kind === "OBSTACLE" ? 25 : 12
+}
+
+function lineStringIntersectsSegment(start: V3Coordinate, end: V3Coordinate, positions: readonly V3Coordinate[]): boolean {
+  for (let index = 0; index < positions.length - 1; index += 1) {
+    if (segmentsIntersect(start, end, positions[index]!, positions[index + 1]!)) return true
+  }
+  return false
+}
+
+function distancePointToSegmentMeters(point: V3Coordinate, start: V3Coordinate, end: V3Coordinate): number {
+  const latitudeScale = 111_320
+  const longitudeScale = latitudeScale * Math.max(0.1, Math.cos((start.latitude + end.latitude) / 2 * Math.PI / 180))
+  const px = point.longitude * longitudeScale
+  const py = point.latitude * latitudeScale
+  const ax = start.longitude * longitudeScale
+  const ay = start.latitude * latitudeScale
+  const bx = end.longitude * longitudeScale
+  const by = end.latitude * latitudeScale
+  const dx = bx - ax
+  const dy = by - ay
+  const lengthSquared = dx * dx + dy * dy
+  const ratio = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared))
+  return Math.hypot(px - (ax + dx * ratio), py - (ay + dy * ratio))
+}
+
+function segmentIntersectsPolygon(start: V3Coordinate, end: V3Coordinate, polygon: readonly V3Coordinate[]): boolean {
+  if (polygon.length < 3) return false
+  if (pointInPolygon(start, polygon) || pointInPolygon(end, polygon)) return true
+  for (let index = 0; index < polygon.length; index += 1) {
+    if (segmentsIntersect(start, end, polygon[index]!, polygon[(index + 1) % polygon.length]!)) return true
+  }
+  return false
+}
+
+function segmentsIntersect(a: V3Coordinate, b: V3Coordinate, c: V3Coordinate, d: V3Coordinate): boolean {
+  const orientation = (left: V3Coordinate, middle: V3Coordinate, right: V3Coordinate) => (middle.latitude - left.latitude) * (right.longitude - middle.longitude) - (middle.longitude - left.longitude) * (right.latitude - middle.latitude)
+  const o1 = orientation(a, b, c)
+  const o2 = orientation(a, b, d)
+  const o3 = orientation(c, d, a)
+  const o4 = orientation(c, d, b)
+  return (o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)
+    || Math.abs(o1) < 1e-12 && pointOnSegment(c, a, b)
+    || Math.abs(o2) < 1e-12 && pointOnSegment(d, a, b)
+    || Math.abs(o3) < 1e-12 && pointOnSegment(a, c, d)
+    || Math.abs(o4) < 1e-12 && pointOnSegment(b, c, d)
+}
+
+function pointOnSegment(point: V3Coordinate, start: V3Coordinate, end: V3Coordinate): boolean {
+  return point.longitude >= Math.min(start.longitude, end.longitude) - 1e-12
+    && point.longitude <= Math.max(start.longitude, end.longitude) + 1e-12
+    && point.latitude >= Math.min(start.latitude, end.latitude) - 1e-12
+    && point.latitude <= Math.max(start.latitude, end.latitude) + 1e-12
+}
+
+function pointInPolygon(point: V3Coordinate, polygon: readonly V3Coordinate[]): boolean {
+  let inside = false
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const currentPoint = polygon[current]!
+    const previousPoint = polygon[previous]!
+    if ((currentPoint.latitude > point.latitude) !== (previousPoint.latitude > point.latitude)) {
+      const longitude = (previousPoint.longitude - currentPoint.longitude) * (point.latitude - currentPoint.latitude) / (previousPoint.latitude - currentPoint.latitude || Number.EPSILON) + currentPoint.longitude
+      if (point.longitude < longitude) inside = !inside
+    }
+  }
+  return inside
+}
+
 function validateFleetRelations(input: VtlPlanValidationInput): VtlPlanCheckIssueView[] {
   const issues: VtlPlanCheckIssueView[] = []
   const horizontalSeparationMeters = input.horizontalSeparationMeters ?? 10
@@ -229,28 +358,70 @@ function validateFleetRelations(input: VtlPlanValidationInput): VtlPlanCheckIssu
 }
 
 function closestTimedRouteRelation(firstRoute: VtlRoutePlanView, secondRoute: VtlRoutePlanView, temporalSeparationSeconds: number): { horizontalMeters: number; verticalMeters: number; timeSeconds: number; taskObjectIds: string[] } | null {
-  const firstWaypoints = firstRoute.waypoints.filter((waypoint) => operationalPhase(waypoint.phase))
-  const secondWaypoints = secondRoute.waypoints.filter((waypoint) => operationalPhase(waypoint.phase))
+  const firstSegments = timedRouteSegments(firstRoute)
+  const secondSegments = timedRouteSegments(secondRoute)
   let closest: { horizontalMeters: number; verticalMeters: number; timeSeconds: number; taskObjectIds: string[] } | null = null
-  for (const firstWaypoint of firstWaypoints) {
-    const firstTimeSeconds = routeWaypointTime(firstRoute, firstWaypoint.sequence)
-    for (const secondWaypoint of secondWaypoints) {
-      const secondTimeSeconds = routeWaypointTime(secondRoute, secondWaypoint.sequence)
-      const timeSeconds = Math.max(firstTimeSeconds, secondTimeSeconds)
-      if (Math.abs(firstTimeSeconds - secondTimeSeconds) > temporalSeparationSeconds) continue
-      const horizontalMeters = distanceBetween(firstWaypoint.position, secondWaypoint.position)
-      const verticalMeters = Math.abs((firstWaypoint.altitudeMeters ?? firstWaypoint.position.altitudeMeters ?? 0) - (secondWaypoint.altitudeMeters ?? secondWaypoint.position.altitudeMeters ?? 0))
-      if (!closest || horizontalMeters < closest.horizontalMeters) {
-        closest = {
-          horizontalMeters,
-          verticalMeters,
-          timeSeconds,
-          taskObjectIds: [firstWaypoint.taskObjectId, secondWaypoint.taskObjectId].filter((taskObjectId): taskObjectId is string => Boolean(taskObjectId))
+  for (const first of firstSegments) {
+    if (!operationalPhase(first.phase)) continue
+    for (const second of secondSegments) {
+      if (!operationalPhase(second.phase)) continue
+      const overlapStart = Math.max(first.startTime, second.startTime)
+      const overlapEnd = Math.min(first.endTime, second.endTime)
+      const samples = overlapStart <= overlapEnd
+        ? sampleTimes(overlapStart, overlapEnd)
+        : [first.endTime, second.endTime].sort((left, right) => left - right)
+      for (const time of samples) {
+        const firstTime = Math.min(first.endTime, Math.max(first.startTime, time))
+        const secondTime = Math.min(second.endTime, Math.max(second.startTime, time))
+        if (Math.abs(firstTime - secondTime) > temporalSeparationSeconds) continue
+        const firstPosition = timedPosition(first, firstTime)
+        const secondPosition = timedPosition(second, secondTime)
+        const candidate = {
+          horizontalMeters: distanceBetween(firstPosition, secondPosition),
+          verticalMeters: Math.abs((firstPosition.altitudeMeters ?? 0) - (secondPosition.altitudeMeters ?? 0)),
+          timeSeconds: (firstTime + secondTime) / 2,
+          taskObjectIds: [first.taskObjectId, second.taskObjectId].filter((taskObjectId): taskObjectId is string => Boolean(taskObjectId))
         }
+        if (!closest || candidate.horizontalMeters < closest.horizontalMeters) closest = candidate
       }
     }
   }
   return closest
+}
+
+type TimedRouteSegment = {
+  phase: VtlFlightPhase
+  startTime: number
+  endTime: number
+  start: V3Coordinate
+  end: V3Coordinate
+  taskObjectId: string | null
+}
+
+function timedRouteSegments(route: VtlRoutePlanView): TimedRouteSegment[] {
+  let cursor = 0
+  return route.energySegments.map((segment, index) => {
+    const startTime = cursor
+    cursor += segment.durationSeconds
+    return {
+      phase: segment.phase,
+      startTime,
+      endTime: cursor,
+      start: route.waypoints[index]?.position ?? route.waypoints[0]?.position ?? { longitude: 0, latitude: 0, altitudeMeters: 0 },
+      end: route.waypoints[index + 1]?.position ?? route.waypoints[index]?.position ?? { longitude: 0, latitude: 0, altitudeMeters: 0 },
+      taskObjectId: route.waypoints[index]?.taskObjectId ?? null
+    }
+  })
+}
+
+function timedPosition(segment: TimedRouteSegment, time: number): V3Coordinate {
+  const ratio = segment.endTime <= segment.startTime ? 1 : (time - segment.startTime) / (segment.endTime - segment.startTime)
+  return interpolate(segment.start, segment.end, Math.max(0, Math.min(1, ratio)))
+}
+
+function sampleTimes(start: number, end: number): number[] {
+  if (end <= start) return [start]
+  return Array.from({ length: 9 }, (_, index) => start + (end - start) * index / 8)
 }
 
 function operationalPhase(phase: VtlFlightPhase): boolean {
@@ -307,6 +478,28 @@ export function projectVtlRuntime(input: VtlRuntimeInput): {
   })
   const totalTaskObjects = input.taskObjects.length
   const completedTaskObjects = new Set(aircraft.flatMap((item) => item.completedTaskObjectIds)).size
+  const routeByAircraftForMetrics = new Map(input.routes.map((route) => [route.aircraftId, route]))
+  const minimumRemainingEnergyWh = aircraft.length === 0
+    ? 0
+    : Math.min(...aircraft.map((item) => item.remainingEnergyWh))
+  const energyReserveViolationCount = aircraft.filter((item) => {
+    const route = routeByAircraftForMetrics.get(item.aircraftId)
+    return route ? item.remainingEnergyWh < route.reserveEnergyWh : false
+  }).length
+  const horizontalSeparationMeters = input.horizontalSeparationMeters ?? 10
+  const verticalSeparationMeters = input.verticalSeparationMeters ?? 30
+  let airborneConflictCount = 0
+  for (let leftIndex = 0; leftIndex < aircraft.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < aircraft.length; rightIndex += 1) {
+      const left = aircraft[leftIndex]!
+      const right = aircraft[rightIndex]!
+      const leftAirborne = ["ACTIVE", "HOLDING", "RETURNING", "DIVERTING"].includes(left.status)
+      const rightAirborne = ["ACTIVE", "HOLDING", "RETURNING", "DIVERTING"].includes(right.status)
+      if (!leftAirborne || !rightAirborne) continue
+      if (distanceBetween(left.position, right.position) < horizontalSeparationMeters
+        && Math.abs((left.position.altitudeMeters ?? 0) - (right.position.altitudeMeters ?? 0)) < verticalSeparationMeters) airborneConflictCount += 1
+    }
+  }
   const phaseDistribution = aircraft.reduce<Partial<Record<VtlFlightPhase, number>>>((result, item) => {
     result[item.phase] = (result[item.phase] ?? 0) + 1
     return result
@@ -323,7 +516,11 @@ export function projectVtlRuntime(input: VtlRuntimeInput): {
       completedTaskObjects,
       incompleteTaskObjects: Math.max(0, totalTaskObjects - completedTaskObjects),
       taskCompletionRatio: totalTaskObjects === 0 ? 0 : completedTaskObjects / totalTaskObjects,
-      phaseDistribution
+      phaseDistribution,
+      minimumRemainingEnergyWh,
+      energyReserveViolationCount,
+      airborneConflictCount,
+      executable: energyReserveViolationCount === 0 && airborneConflictCount === 0 && completedTaskObjects === totalTaskObjects
     }
   }
 }
@@ -584,6 +781,6 @@ function interpolate(start: { longitude: number; latitude: number; altitudeMeter
   }
 }
 
-function issue(code: string, category: VtlPlanCheckIssueView["category"], severity: VtlPlanCheckIssueView["severity"], aircraftIds: string[], taskObjectIds: string[], message: string, suggestion: string): VtlPlanCheckIssueView {
-  return { id: `VTL-${code}-${aircraftIds.join("-")}-${taskObjectIds.join("-")}`, code, scope: aircraftIds.length > 0 ? "AIRCRAFT" : "FLEET", category, severity, aircraftIds, taskObjectIds, message, suggestion }
+function issue(code: string, category: VtlPlanCheckIssueView["category"], severity: VtlPlanCheckIssueView["severity"], aircraftIds: string[], taskObjectIds: string[], message: string, suggestion: string, identity = ""): VtlPlanCheckIssueView {
+  return { id: `VTL-${code}-${aircraftIds.join("-")}-${taskObjectIds.join("-")}${identity ? `-${identity}` : ""}`, code, scope: aircraftIds.length > 0 ? "AIRCRAFT" : "FLEET", category, severity, aircraftIds, taskObjectIds, message, suggestion }
 }

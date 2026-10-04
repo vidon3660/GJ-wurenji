@@ -43,7 +43,7 @@ async function saveEndReport() {
 
 async function submitEndReport() {
   try {
-    await ElMessageBox.confirm("确认提交飞行结束报备？提交后将进入复盘评价阶段。", "提交飞行结束报备", {
+    await ElMessageBox.confirm("确认提交飞行结束报备？提交后将进入飞后运行评估阶段。", "提交飞行结束报备", {
       confirmButtonText: "确认提交",
       cancelButtonText: "取消",
       type: "warning"
@@ -116,7 +116,7 @@ function formatTime(value: string | null) {
         <label><span>异常说明</span><el-input v-model="abnormalDescription" type="textarea" :rows="5" maxlength="2000" show-word-limit :disabled="!canSubmit" /></label>
       </section>
       <section v-if="report?.status === 'SUBMITTED'" class="flight-end-authority">
-        <header><strong>系统权威清点</strong><el-tag :type="report.answerCorrect ? 'success' : 'danger'">{{ report.answerCorrect ? '判定正确' : '需要复核' }}</el-tag></header>
+        <header><strong>系统清点结果</strong><el-tag :type="report.answerCorrect ? 'success' : 'danger'">{{ report.answerCorrect ? '判定正确' : '需处理' }}</el-tag></header>
         <div><span>系统正常降落</span><strong>{{ report.authoritativeNormalLandedCount }}</strong><small>学生填报 {{ report.normalLandedCount ?? '-' }}</small></div>
         <div><span>系统异常数量</span><strong>{{ report.authoritativeAbnormalCount }}</strong><small>学生填报 {{ report.abnormalCount ?? '-' }}</small></div>
       </section>
@@ -126,9 +126,9 @@ function formatTime(value: string | null) {
       <div class="flight-end-mark" :class="report?.status.toLowerCase()"><el-icon><CircleCheck /></el-icon><strong>{{ report?.status === 'SUBMITTED' ? '报备已提交' : '等待提交' }}</strong><span>{{ report?.submittedAt ? formatTime(report.submittedAt) : '教学仿真流程记录' }}</span></div>
       <dl>
         <div><dt>是否按计划完成</dt><dd>{{ completionStatus === 'NORMAL' ? '是' : completionStatus ? '否' : '待确认' }}</dd></div>
-        <div><dt>数量核对</dt><dd>{{ normalLandedCount + abnormalCount === (report?.actualTakeoffCount ?? 0) ? '一致' : '待核对' }}</dd></div>
+        <div><dt>数量核对</dt><dd>{{ normalLandedCount + abnormalCount === (report?.actualTakeoffCount ?? 0) ? '一致' : '待处理' }}</dd></div>
         <div><dt>异常说明</dt><dd>{{ completionStatus === 'NORMAL' ? '不要求' : abnormalDescription.trim().length >= 5 ? '已填写' : '待填写' }}</dd></div>
-        <div><dt>权威判定</dt><dd>{{ report?.answerCorrect === null ? '待提交' : report?.answerCorrect ? '清点正确' : '清点需复核' }}</dd></div>
+        <div><dt>系统判定</dt><dd>{{ report?.answerCorrect === null ? '待提交' : report?.answerCorrect ? '清点正确' : '清点需处理' }}</dd></div>
         <div><dt>提交人</dt><dd>{{ report?.submittedBy ?? '待提交' }}</dd></div>
       </dl>
       <footer v-if="canSubmit && user.role === 'student'"><el-button native-type="button" :icon="Upload" @click="saveEndReport">保存草稿</el-button><el-button native-type="button" type="primary" @click="submitEndReport">提交结束报备</el-button></footer>
