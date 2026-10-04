@@ -8,7 +8,7 @@ import type {
   V3RegionLayerDefinition,
   V3RegionCatalogItem
 } from "@wurenji/shared"
-import { resolveWorkspacePath } from "../../config/runtime-paths.js"
+import { resolveMapDataPath } from "../../config/runtime-paths.js"
 
 interface MapResourceManifest {
   terrain?: { sha256?: unknown; version?: unknown }
@@ -17,7 +17,7 @@ interface MapResourceManifest {
 
 export async function checkRegionMapReadiness(
   region: Pick<V3RegionCatalogItem, "packageId" | "packageVersion" | "regionCode" | "heightDatum" | "terrainResourceVersion" | "terrain" | "imagery" | "boundary"> & { layers?: V3RegionLayerDefinition[] },
-  mapRoot = resolveWorkspacePath(process.env.MAP_DATA_DIR, "apps/web/dist/map")
+  mapRoot = resolveMapDataPath()
 ) {
   const checks: V3MapResourceReadinessCheck[] = []
   const root = resolve(mapRoot)
@@ -58,7 +58,7 @@ export async function checkRegionMapReadiness(
 export async function sampleRegionElevation(
   terrain: NonNullable<V3RegionCatalogItem["terrain"]> | null | undefined,
   coordinate: { longitude: number; latitude: number },
-  mapRoot = resolveWorkspacePath(process.env.MAP_DATA_DIR, "apps/web/dist/map")
+  mapRoot = resolveMapDataPath()
 ): Promise<number | null> {
   if (!terrain?.elevationSampleUrl || !Number.isFinite(coordinate.longitude) || !Number.isFinite(coordinate.latitude)) return null
   if (!insideExtent(coordinate, terrain.extent)) return null

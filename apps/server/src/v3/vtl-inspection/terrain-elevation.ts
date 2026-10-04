@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { isAbsolute, relative, resolve } from "node:path"
 import type { V3TerrainResource, VtlRouteWaypointInput, VtlTerrainProfileSample } from "@wurenji/shared"
+import { resolveMapDataPath } from "../../config/runtime-paths.js"
 
 export interface VtlElevationSample {
   longitude: number
@@ -8,7 +9,7 @@ export interface VtlElevationSample {
   heightMeters: number
 }
 
-export async function loadVtlElevationSamples(resource: V3TerrainResource | null | undefined, mapRoot = process.env.MAP_DATA_DIR ?? "data/map"): Promise<VtlElevationSample[]> {
+export async function loadVtlElevationSamples(resource: V3TerrainResource | null | undefined, mapRoot = resolveMapDataPath()): Promise<VtlElevationSample[]> {
   const path = localMapPath(resource?.elevationSampleUrl, mapRoot)
   if (!path) return []
   try {

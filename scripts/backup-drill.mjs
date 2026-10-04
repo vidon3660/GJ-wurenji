@@ -5,6 +5,7 @@ import { resolve } from "node:path"
 import { promisify } from "node:util"
 import { Client as MinioClient } from "minio"
 import pg from "pg"
+import { requiresObjectStorage } from "./backup-storage.mjs"
 
 const execFile = promisify(execFileCallback)
 const { Client: PgClient } = pg
@@ -37,8 +38,10 @@ try {
       const manifest = JSON.parse(await readFile(resolve(sourcePath, "manifest.json"), "utf8"))
       await createTemporaryDatabase()
       temporaryDatabaseCreated = true
-      await createTemporaryBucket()
-      temporaryBucketCreated = true
+      if (requiresObjectStorage(manifest)) {
+        await createTemporaryBucket()
+        temporaryBucketCreated = true
+      }
       const restored = await runBackupCommand("restore", ["--input", sourcePath, "--confirm", "RESTORE"], restoreEnvironment())
       if (restored.code !== 0) {
         report = blockedReport("RESTORE_FAILED", restored, manifest)
@@ -55,10 +58,10 @@ try {
           rpoSeconds: 0,
           rtoSeconds: Math.round((Date.now() - startedAt) / 1000),
           source: { recoveryPoint: sourcePath, manifest: manifest.format, fileAssets: manifest.fileAssets.length },
-          isolatedTarget: { database: databaseName, bucket: bucketName },
+          isolatedTarget: { database: databaseName, bucket: temporaryBucketCreated ? bucketName : null },
           tableCounts: counts,
           fileCheck,
-          output: "临时数据库和对象存储桶将在报告写入后清理"
+          output: temporaryBucketCreated ? "临时数据库和对象存储桶将在报告写入后清理" : "临时数据库和本地文件将在报告写入后清理"
         }
       }
     }
@@ -152,7 +155,7 @@ async function readTableCounts() {
 async function verifyRestoredFiles(manifest) {
   const assets = manifest.fileAssets.filter((asset) => asset.status !== "DELETED")
   const artifacts = new Map(manifest.artifacts.filter((artifact) => artifact.kind === "V3_FILE" || artifact.kind === "V3_FILE_LOCAL").map((artifact) => [`${artifact.storageProvider}:${artifact.objectKey}`, artifact]))
-  const client = createMinioClient()
+  const client = assets.some((asset) => asset.storageProvider !== "LOCAL") ? createMinioClient() : null
   const findings = []
   for (const asset of assets) {
     const artifact = artifacts.get(`${asset.storageProvider}:${asset.objectKey}`)

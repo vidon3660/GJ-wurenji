@@ -12,7 +12,8 @@ const execFile = promisify(execFileCallback)
 const { Client: PgClient } = pg
 const command = process.argv[2] ?? "help"
 const argumentsByName = parseArguments(process.argv.slice(3))
-const backupPath = resolve(argumentsByName.output ?? argumentsByName.input ?? `data/backups/${timestamp()}`)
+const backupRoot = process.env.BACKUP_ROOT?.trim() || "data/backups"
+const backupPath = resolve(argumentsByName.output ?? argumentsByName.input ?? `${backupRoot}/${timestamp()}`)
 
 if (command === "create") await createBackup()
 else if (command === "verify") await verifyBackup(backupPath)

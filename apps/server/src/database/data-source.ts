@@ -1,7 +1,8 @@
 import "reflect-metadata"
 import { DataSource } from "typeorm"
-import { dirname, join } from "node:path"
+import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { resolveMigrationFiles } from "./migration-files.js"
 import { entities } from "../entities.js"
 import { educationEntities } from "../education/education.entities.js"
 import { questionBankEntities } from "../education/question-bank.entities.js"
@@ -30,7 +31,9 @@ export const AppDataSource = new DataSource({
   type: "postgres",
   url: process.env.DATABASE_URL ?? "postgresql://wurenji@localhost:55432/wurenji",
   entities: [...entities, ...educationEntities, ...questionBankEntities, ...logisticsEntities, ...v3ResourceEntities, ...scenarioOverlayEntities, ...v3ActivityEntities, ...v3AssignmentEntities, ...v3ShowProjectEntities, ...v3RuntimeEntities, ...v3FileEntities, ...v3JobEntities, ...v3DocumentEntities, ...v3ShowReadinessEntities, ...v3ShowRuntimeEntities, ...v3ShowReviewEntities, ...v3LogisticsRouteEntities, ...v3LogisticsSchedulingEntities, ...v3LogisticsRuntimeEntities, ...v3VtlInspectionEntities, ...v3VtlRuntimeEntities],
-  migrations: [join(directory, "migrations", "*.js")],
+  // Development runs this module through tsx (the source .ts files); the
+  // production command loads the compiled .js files from dist.
+  migrations: resolveMigrationFiles(directory),
   migrationsTableName: "typeorm_migrations",
   synchronize: false,
   logging: process.env.TYPEORM_LOGGING === "true"

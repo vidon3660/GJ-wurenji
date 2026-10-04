@@ -62,9 +62,7 @@ try {
         ".education-page",
         ".page-heading",
         ".v3-home-metrics",
-        ".teacher-progress-section",
-        ".assignment-todo-section",
-        ".assignment-filter-toolbar"
+        ".teacher-entry-cards"
       ].map((selector) => {
         const element = document.querySelector(selector)
         if (!element || !visible(element)) return { selector, present: false }

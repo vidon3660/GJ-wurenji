@@ -1,15 +1,34 @@
 import { mkdir, rm, writeFile } from "node:fs/promises"
-import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { join, relative } from "node:path"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { workspaceRoot } from "../../config/runtime-paths.js"
 import { buildVtlTerrainProfile, loadVtlElevationSamples } from "./terrain-elevation.js"
 
 const root = join(process.cwd(), "artifacts", "vtl-terrain-test")
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await rm(root, { recursive: true, force: true })
 })
 
 describe("VTL terrain elevation source", () => {
+  it("loads configured relative map paths from the workspace rather than the server cwd", async () => {
+    await mkdir(join(root, "regions", "VTL-TEST"), { recursive: true })
+    await writeFile(join(root, "regions", "VTL-TEST", "elevation-samples.json"), JSON.stringify({ samples: [{ longitude: 114, latitude: 22, heightMeters: 18 }] }))
+    vi.stubEnv("MAP_DATA_DIR", relative(workspaceRoot, root))
+    const samples = await loadVtlElevationSamples({
+      provider: "CESIUM_QUANTIZED_MESH",
+      url: "/map/regions/VTL-TEST/terrain",
+      version: "1.0.0",
+      sha256: "a".repeat(64),
+      verticalDatum: "AMSL",
+      extent: [113, 21, 115, 23],
+      elevationSampleUrl: "/map/regions/VTL-TEST/elevation-samples.json",
+      elevationSampleSha256: "b".repeat(64)
+    })
+    expect(samples).toEqual([{ longitude: 114, latitude: 22, heightMeters: 18 }])
+  })
+
   it("loads the local authoritative sample snapshot", async () => {
     await mkdir(join(root, "regions", "VTL-TEST"), { recursive: true })
     await writeFile(join(root, "regions", "VTL-TEST", "elevation-samples.json"), JSON.stringify({ samples: [{ longitude: 114, latitude: 22, heightMeters: 18 }] }))

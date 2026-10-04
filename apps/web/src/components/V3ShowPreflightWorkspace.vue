@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
 import { Check, CircleCheck, Refresh, Warning } from "@element-plus/icons-vue"
 import type {
@@ -24,9 +24,10 @@ const workspace = ref<ShowPreflightWorkspaceView | null>(null)
 const items = ref<ShowPreflightItemView[]>([])
 const decision = ref<ShowTakeoffDecision | null>(null)
 const rationale = ref("")
+let requestSequence = 0
 
 const isStudent = computed(() => props.user.role === "student")
-const canEdit = computed(() => Boolean(workspace.value?.canEdit && isStudent.value && props.project.assessmentTiming.canWrite))
+const canEdit = computed(() => Boolean(workspace.value?.projectId === props.project.id && workspace.value?.canEdit && isStudent.value && props.project.assessmentTiming.canWrite))
 const confirmedCount = computed(() => items.value.filter((item) => item.confirmed).length)
 const issueCount = computed(() => items.value.filter((item) => item.sourceStatus !== "NORMAL").length)
 const unresolvedCount = computed(() => items.value.filter((item) => item.sourceStatus !== "NORMAL" && !item.resolved).length)
@@ -53,22 +54,43 @@ const resolutionOptions: Array<{ value: ShowPreflightResolution; label: string }
 ]
 
 onMounted(loadWorkspace)
-watch(() => props.project.id, loadWorkspace)
+watch(() => props.project.id, () => {
+  requestSequence += 1
+  loading.value = false
+  workspace.value = null
+  items.value = []
+  decision.value = null
+  rationale.value = ""
+  void loadWorkspace()
+})
+onBeforeUnmount(() => { requestSequence += 1 })
+
+function isCurrentRequest(sequence: number, projectId: string) {
+  return sequence === requestSequence && projectId === props.project.id
+}
+
+function applyWorkspace(value: ShowPreflightWorkspaceView) {
+  workspace.value = value
+  items.value = value.items.map((item) => ({ ...item }))
+  decision.value = value.decision
+  rationale.value = value.rationale
+}
 
 async function loadWorkspace() {
+  if (loading.value) return
+  const projectId = props.project.id
+  const sequence = ++requestSequence
   loading.value = true
   loadError.value = ""
   try {
-    const value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${props.project.id}/preflight`)
-    workspace.value = value
-    items.value = value.items.map((item) => ({ ...item }))
-    decision.value = value.decision
-    rationale.value = value.rationale
+    const value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${projectId}/preflight`)
+    if (isCurrentRequest(sequence, projectId)) applyWorkspace(value)
   } catch (error) {
+    if (!isCurrentRequest(sequence, projectId)) return
     loadError.value = error instanceof Error ? error.message : "飞前检查加载失败"
     ElMessage.error(loadError.value)
   } finally {
-    loading.value = false
+    if (isCurrentRequest(sequence, projectId)) loading.value = false
   }
 }
 
@@ -80,16 +102,16 @@ function confirmNormalItems() {
 }
 
 function updateResolution(item: ShowPreflightItemView, value: ShowPreflightResolution | null) {
+  if (!canEdit.value || loading.value) return
   item.resolution = value
   if (value === "EXCLUDED" || value === "REPLACED" || value === "RECHECKED") item.resolved = true
   if (value === "PAUSED") item.resolved = false
 }
 
-async function save(showMessage = true) {
-  if (!workspace.value || !canEdit.value || loading.value) return
-  loading.value = true
+async function saveDraft(projectId: string, sequence: number): Promise<ShowPreflightWorkspaceView | null> {
+  if (!workspace.value) return null
   try {
-    const value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${props.project.id}/preflight`, {
+    const value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${projectId}/preflight`, {
       method: "PUT",
       body: JSON.stringify({
         expectedRevision: workspace.value.revision,
@@ -98,33 +120,47 @@ async function save(showMessage = true) {
         rationale: rationale.value
       })
     })
-    workspace.value = value
-    items.value = value.items.map((item) => ({ ...item }))
-    if (showMessage) ElMessage.success("飞前检查已保存")
+    if (!isCurrentRequest(sequence, projectId)) return null
+    applyWorkspace(value)
+    return value
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "飞前检查保存失败")
-    await loadWorkspace()
+    if (isCurrentRequest(sequence, projectId)) ElMessage.error(error instanceof Error ? error.message : "飞前检查保存失败")
+    return null
+  }
+}
+
+async function save() {
+  if (!workspace.value || !canEdit.value || loading.value) return
+  const projectId = props.project.id
+  const sequence = ++requestSequence
+  loading.value = true
+  try {
+    if (await saveDraft(projectId, sequence)) ElMessage.success("飞前检查已保存")
   } finally {
-    loading.value = false
+    if (isCurrentRequest(sequence, projectId)) loading.value = false
   }
 }
 
 async function complete() {
-  if (!workspace.value || loading.value || !decisionGate.value.canComplete) return
-  await save(false)
-  if (!workspace.value) return
+  if (!workspace.value || !canEdit.value || loading.value || !decisionGate.value.canComplete) return
+  const projectId = props.project.id
+  const sequence = ++requestSequence
   loading.value = true
   try {
-    workspace.value = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${props.project.id}/preflight/complete`, {
+    const saved = await saveDraft(projectId, sequence)
+    if (!saved || !isCurrentRequest(sequence, projectId) || !canEdit.value || !decisionGate.value.canComplete) return
+    const completed = await api<ShowPreflightWorkspaceView>(`/v3/show-projects/${projectId}/preflight/complete`, {
       method: "POST",
-      body: JSON.stringify({ expectedRevision: workspace.value.revision })
+      body: JSON.stringify({ expectedRevision: saved.revision })
     })
+    if (!isCurrentRequest(sequence, projectId)) return
+    applyWorkspace(completed)
     ElMessage.success("飞前准备已完成，仿真时钟已启动")
     emit("refreshProject")
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "飞前准备提交失败")
+    if (isCurrentRequest(sequence, projectId)) ElMessage.error(error instanceof Error ? error.message : "飞前准备提交失败")
   } finally {
-    loading.value = false
+    if (isCurrentRequest(sequence, projectId)) loading.value = false
   }
 }
 
@@ -168,13 +204,13 @@ function sourceLabel(status: ShowPreflightItemView["sourceStatus"]) {
     <aside v-if="workspace || !loadError" class="preflight-decision">
       <header><span>TAKEOFF DECISION</span><strong>起飞决策</strong></header>
       <p class="decision-instruction">全部检查项确认后作出判断，四种决策均须填写简要依据。</p>
-      <el-radio-group v-model="decision" :disabled="!canEdit || !decisionGate.checksComplete" class="decision-options">
+      <el-radio-group v-model="decision" :disabled="!canEdit || loading || !decisionGate.checksComplete" class="decision-options">
         <el-radio-button value="ALLOW">允许起飞</el-radio-button>
         <el-radio-button value="ALLOW_AFTER_RECTIFICATION">整改后起飞</el-radio-button>
         <el-radio-button value="DELAY">推迟起飞</el-radio-button>
         <el-radio-button value="CANCEL">取消表演</el-radio-button>
       </el-radio-group>
-      <label><span>判断依据</span><el-input v-model="rationale" :disabled="!canEdit || !decision" type="textarea" :rows="5" maxlength="2000" show-word-limit placeholder="简要说明检查结论、风险判断和决策原因" /></label>
+      <label><span>判断依据</span><el-input v-model="rationale" :disabled="!canEdit || loading || !decision" type="textarea" :rows="5" maxlength="2000" show-word-limit placeholder="简要说明检查结论、风险判断和决策原因" /></label>
       <div class="decision-summary"><span :class="{ complete: confirmedCount === items.length }">{{ confirmedCount === items.length ? '检查项已全部确认' : `尚有 ${items.length - confirmedCount} 项未确认` }}</span><span :class="{ complete: unresolvedCount === 0 }">{{ unresolvedCount === 0 ? '异常项已形成处置结果' : `${unresolvedCount} 项异常未处置` }}</span></div>
       <footer v-if="canEdit"><el-button :disabled="loading" @click="confirmNormalItems">确认全部正常项</el-button><el-button :loading="loading" :disabled="loading" @click="save()">保存</el-button><el-button type="primary" :icon="CircleCheck" :loading="loading" :disabled="loading || !decisionGate.canComplete" @click="complete">完成飞前准备</el-button></footer>
       <div v-else class="preflight-readonly"><strong>{{ workspace?.status === 'COMPLETED' ? '飞前准备已完成' : '只读查看' }}</strong><span>{{ workspace?.completedAt ? formatPlatformDateTime(workspace.completedAt) : '等待学生提交' }}</span></div>

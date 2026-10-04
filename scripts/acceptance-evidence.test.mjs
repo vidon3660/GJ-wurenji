@@ -2,11 +2,31 @@ import assert from "node:assert/strict"
 import { execFile as execFileCallback } from "node:child_process"
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { dirname, join, relative, resolve } from "node:path"
 import test from "node:test"
 import { promisify } from "node:util"
 
 const execFile = promisify(execFileCallback)
+
+test("map resources use workspace-relative paths when the report runs from another directory", async (context) => {
+  const workspaceRoot = resolve(".")
+  const root = await mkdtemp(join(tmpdir(), "wurenji-map-path-"))
+  const mapDirectory = join(root, "map")
+  const outputPath = join(root, "acceptance.json")
+  context.after(() => rm(root, { recursive: true, force: true }))
+  await mkdir(join(mapDirectory, "regions", "TEST"), { recursive: true })
+  const configuredPath = relative(workspaceRoot, mapDirectory)
+  await assert.rejects(execFile(process.execPath, [join(workspaceRoot, "scripts/acceptance-evidence.mjs"), "--output", outputPath], {
+    cwd: root,
+    env: { ...process.env, ACCEPTANCE_ARTIFACTS_DIR: join(root, "artifacts"), MAP_DATA_DIR: configuredPath },
+    windowsHide: true
+  }), { code: 1 })
+  const report = JSON.parse(await readFile(outputPath, "utf8"))
+  const mapCheck = check(report, "MAP-OFFLINE")
+  assert.equal(mapCheck.status, "FAIL")
+  assert.match(mapCheck.message, /TEST（区域包描述缺少有效 sceneType）/)
+  assert.equal(mapCheck.evidence, configuredPath.replaceAll("\\", "/"))
+})
 
 test("VTL scale and long-run evidence enter the candidate report", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "wurenji-acceptance-evidence-"))

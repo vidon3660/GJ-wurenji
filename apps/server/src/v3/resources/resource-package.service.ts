@@ -805,6 +805,8 @@ export class ResourcePackageService {
         const source = await this.storage.read(item.archiveAsset.objectKey, item.archiveAsset.storageProvider)
         if (sha256(source) !== item.sha256 || item.archiveAsset.sha256 !== item.sha256) throw new Error("源文件 SHA-256 与资源记录不一致")
         const reparsed = parseShowProgramCsv(source, item.manifest.sourceSoftware)
+        const failedChecks = reparsed.checks.filter((check) => !check.passed)
+        if (failedChecks.length > 0) throw new Error(`轨迹间距校验未通过：${failedChecks.map((check) => check.message).join("；")}`)
         if (canonicalJson(reparsed.manifest) !== canonicalJson(item.manifest)) throw new Error("重新解析结果与导入摘要不一致")
       } catch (error) {
         throw new ConflictException(`舞步程序激活前完整性检查失败：${normalizeError(error)}`)
@@ -917,9 +919,10 @@ function assertArchiveIdentity(item: ResourcePackageEntity, inspected: Inspected
 
 function assertValidatedForActivation(item: ResourcePackageEntity): void {
   if (item.source === "BUILT_IN") return
-  if (item.source === "IMPORTED_TRAJECTORY" && item.packageType === "SHOW_PROGRAM" && item.archiveAsset && item.validatedAt && !item.rejectionReason && item.validationChecks.length > 0 && item.validationChecks.every((check) => check.passed)) return
+  const checks = Array.isArray(item.validationChecks) ? item.validationChecks : []
+  if (item.source === "IMPORTED_TRAJECTORY" && item.packageType === "SHOW_PROGRAM" && item.archiveAsset && item.validatedAt && !item.rejectionReason && checks.length > 0 && checks.every((check) => check.passed)) return
   if (item.source === "UNSIGNED_TEST" && process.env.V3_ALLOW_UNSIGNED_RESOURCE_REGISTRATION === "true") return
-  if (item.source !== "SIGNED_ARCHIVE" || !item.archiveAsset || !item.archiveManifest || !item.validatedAt || item.rejectionReason || item.validationChecks.some((check) => !check.passed)) {
+  if (item.source !== "SIGNED_ARCHIVE" || !item.archiveAsset || !item.archiveManifest || !item.validatedAt || item.rejectionReason || checks.length === 0 || checks.some((check) => !check.passed)) {
     throw new ConflictException("资源包尚未通过完整签名预检")
   }
 }

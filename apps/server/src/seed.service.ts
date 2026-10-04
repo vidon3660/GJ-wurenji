@@ -3,9 +3,10 @@ import { InjectRepository } from "@nestjs/typeorm"
 import { hash } from "bcryptjs"
 import { Repository } from "typeorm"
 import { existsSync, readFileSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { join } from "node:path"
 import { createDemoScene, showTemplatePolicyForAircraftCount, vtlTemplatePolicyForAircraftCount, type EvaluationDimension, type QuestionDefinition, type ReferenceAnswerSummary, type SceneType, type V3Coordinate } from "@wurenji/shared"
 import { PracticeEntity, UserEntity } from "./entities.js"
+import { resolveMapDataPath } from "./config/runtime-paths.js"
 import { sha256Canonical } from "./v3/common/canonical-json.js"
 import { ResourcePackageEntity } from "./v3/resources/resource-package.entity.js"
 import { createBuiltinLogisticsNodes } from "./v3/resources/builtin-logistics-nodes.js"
@@ -724,7 +725,7 @@ function createImportedRegionManifest(
 }
 
 function readImportedNaturalLayers(regionCode: string, extent: readonly [number, number, number, number]): { waterFile: string | null; greenFile: string | null; water: any[]; green: any[] } {
-  const root = resolve(process.env.MAP_DATA_DIR ?? "data/map", "regions", regionCode)
+  const root = join(resolveMapDataPath(), "regions", regionCode)
   const waterFile = existsSync(join(root, "water.geojson")) ? "water.geojson" : existsSync(join(root, "hydro-base.geojson")) ? "hydro-base.geojson" : null
   const greenFile = existsSync(join(root, "green.geojson")) ? "green.geojson" : null
   return {

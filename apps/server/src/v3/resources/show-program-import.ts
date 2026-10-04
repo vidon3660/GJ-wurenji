@@ -128,9 +128,9 @@ export function parseShowProgramCsv(content: Buffer, sourceSoftware: string): Pa
 }
 
 /**
- * Check the imported individual aircraft tracks before they are reduced to
- * group averages. A spatial hash keeps the check bounded for the 3,000-aircraft
- * template; a broad phase narrows candidate pairs before exact segment checks.
+ * Validate individual, piecewise-linear tracks before reducing them to group
+ * averages. Swept bounds cover the full interval, so short conflicts between
+ * source keyframes cannot be skipped by a sampling step.
  */
 function validateMultiAircraftSeparation(
   tracks: Map<string, SourcePoint[]>,
@@ -139,49 +139,43 @@ function validateMultiAircraftSeparation(
 ): V3ResourceValidationCheck {
   const horizontalLimit = 5
   const verticalLimit = 3
-  const collisionPairs = new Set<string>()
+  const aircraftTracks = [...tracks.values()]
+  const collisionPairs = new Set<number>()
   let minimumHorizontal = Number.POSITIVE_INFINITY
-  let firstCollisionTime: number | null = null
+  let firstCollisionTime = Number.POSITIVE_INFINITY
   for (let intervalIndex = 0; intervalIndex < sourceTimes.length - 1; intervalIndex += 1) {
     const intervalStart = sourceTimes[intervalIndex]!
     const intervalEnd = sourceTimes[intervalIndex + 1]!
-    const candidates = new Set<string>()
-    // Broad phase: identify pairs that approach one another at any of eight
-    // points in the interval. The exact relative-motion check below then
-    // calculates the closest point on the full linear segments.
-    for (let subdivision = 0; subdivision <= 8; subdivision += 1) {
-      const sourceTimeMs = intervalStart + (intervalEnd - intervalStart) * subdivision / 8
-      const buckets = new Map<string, Array<{ id: string; point: SourcePoint }>>()
-      for (const [id, points] of tracks) {
-        const point = interpolate(points, sourceTimeMs)
-        const eastCell = Math.floor(point.eastMeters / horizontalLimit)
-        const northCell = Math.floor(point.northMeters / horizontalLimit)
-        for (let eastOffset = -1; eastOffset <= 1; eastOffset += 1) {
-          for (let northOffset = -1; northOffset <= 1; northOffset += 1) {
-            const key = `${eastCell + eastOffset}:${northCell + northOffset}`
-            for (const candidate of buckets.get(key) ?? []) candidates.add([id, candidate.id].sort().join("/"))
-          }
-        }
-        const ownKey = `${eastCell}:${northCell}`
-        const own = buckets.get(ownKey) ?? []
-        own.push({ id, point })
-        buckets.set(ownKey, own)
+    const segments = aircraftTracks.map((points, aircraftIndex) => {
+      const start = interpolate(points, intervalStart)
+      const end = interpolate(points, intervalEnd)
+      return {
+        aircraftIndex, start, end,
+        minimumEast: Math.min(start.eastMeters, end.eastMeters),
+        maximumEast: Math.max(start.eastMeters, end.eastMeters),
+        minimumNorth: Math.min(start.northMeters, end.northMeters),
+        maximumNorth: Math.max(start.northMeters, end.northMeters),
+        minimumUp: Math.min(start.upMeters, end.upMeters),
+        maximumUp: Math.max(start.upMeters, end.upMeters)
       }
-    }
-    for (const pair of candidates) {
-      const [leftId, rightId] = pair.split("/")
-      const left = tracks.get(leftId!)
-      const right = tracks.get(rightId!)
-      if (!left || !right) continue
-      const leftStart = interpolate(left, intervalStart)
-      const leftEnd = interpolate(left, intervalEnd)
-      const rightStart = interpolate(right, intervalStart)
-      const rightEnd = interpolate(right, intervalEnd)
-      const closest = closestSynchronousDistance(leftStart, leftEnd, rightStart, rightEnd, horizontalLimit, verticalLimit)
-      minimumHorizontal = Math.min(minimumHorizontal, closest.horizontal)
-      if (closest.conflict) {
-        collisionPairs.add(pair)
-        firstCollisionTime ??= intervalStart - minimumSourceTimeMs + (intervalEnd - intervalStart) * closest.ratio
+    }).sort((left, right) => left.minimumEast - right.minimumEast)
+    for (let leftIndex = 0; leftIndex < segments.length; leftIndex += 1) {
+      const left = segments[leftIndex]!
+      for (let rightIndex = leftIndex + 1; rightIndex < segments.length; rightIndex += 1) {
+        const right = segments[rightIndex]!
+        if (right.minimumEast - left.maximumEast >= horizontalLimit) break
+        if (right.minimumNorth - left.maximumNorth >= horizontalLimit
+          || left.minimumNorth - right.maximumNorth >= horizontalLimit
+          || right.minimumUp - left.maximumUp >= verticalLimit
+          || left.minimumUp - right.maximumUp >= verticalLimit) continue
+        const closest = closestSynchronousDistance(left.start, left.end, right.start, right.end, horizontalLimit, verticalLimit)
+        if (!closest) continue
+        const firstIndex = Math.min(left.aircraftIndex, right.aircraftIndex)
+        const secondIndex = Math.max(left.aircraftIndex, right.aircraftIndex)
+        collisionPairs.add(firstIndex * aircraftTracks.length + secondIndex)
+        minimumHorizontal = Math.min(minimumHorizontal, closest.horizontal)
+        firstCollisionTime = Math.min(firstCollisionTime,
+          intervalStart - minimumSourceTimeMs + (intervalEnd - intervalStart) * closest.startRatio)
       }
     }
   }
@@ -189,13 +183,13 @@ function validateMultiAircraftSeparation(
     return {
       code: "SHOW_PROGRAM_AIR_CONFLICT",
       passed: false,
-      message: `检测到 ${collisionPairs.size} 组机间距不足（最小水平间距 ${round(minimumHorizontal)} m，约发生于 ${round((firstCollisionTime ?? 0) / 1000)} s；要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
+      message: `检测到 ${collisionPairs.size} 组机间距不足（冲突期间最小水平间距 ${round(minimumHorizontal)} m，首次约发生于 ${round(firstCollisionTime / 1000)} s；要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
     }
   }
   return {
     code: "SHOW_PROGRAM_AIR_CONFLICT",
     passed: true,
-    message: `逐机轨迹间距检查通过（最小水平间距 ${Number.isFinite(minimumHorizontal) ? `${round(minimumHorizontal)} m` : "无可比较轨迹"}；要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
+    message: `逐机连续航段间距检查通过（要求水平 ${horizontalLimit} m、垂直 ${verticalLimit} m）`
   }
 }
 
@@ -206,47 +200,52 @@ function closestSynchronousDistance(
   rightEnd: SourcePoint,
   horizontalLimit: number,
   verticalLimit: number
-): { horizontal: number; vertical: number; ratio: number; conflict: boolean } {
+): { horizontal: number; startRatio: number } | null {
   const relativeStartEast = leftStart.eastMeters - rightStart.eastMeters
   const relativeStartNorth = leftStart.northMeters - rightStart.northMeters
   const relativeVelocityEast = (leftEnd.eastMeters - leftStart.eastMeters) - (rightEnd.eastMeters - rightStart.eastMeters)
   const relativeVelocityNorth = (leftEnd.northMeters - leftStart.northMeters) - (rightEnd.northMeters - rightStart.northMeters)
-  const denominator = relativeVelocityEast ** 2 + relativeVelocityNorth ** 2
-  const closestRatio = denominator < Number.EPSILON
-    ? 0
-    : Math.max(0, Math.min(1, -(relativeStartEast * relativeVelocityEast + relativeStartNorth * relativeVelocityNorth) / denominator))
   const horizontalInterval = quadraticInterval(relativeStartEast, relativeStartNorth, relativeVelocityEast, relativeVelocityNorth, horizontalLimit)
   const verticalInterval = linearAbsoluteInterval(leftStart.upMeters - rightStart.upMeters, (leftEnd.upMeters - leftStart.upMeters) - (rightEnd.upMeters - rightStart.upMeters), verticalLimit)
+  if (!horizontalInterval || !verticalInterval) return null
   const conflictStart = Math.max(horizontalInterval[0], verticalInterval[0])
   const conflictEnd = Math.min(horizontalInterval[1], verticalInterval[1])
-  const ratio = conflictStart <= conflictEnd
-    ? Math.max(conflictStart, Math.min(conflictEnd, closestRatio))
-    : closestRatio
-  const leftEast = leftStart.eastMeters + (leftEnd.eastMeters - leftStart.eastMeters) * ratio
-  const leftNorth = leftStart.northMeters + (leftEnd.northMeters - leftStart.northMeters) * ratio
-  const leftUp = leftStart.upMeters + (leftEnd.upMeters - leftStart.upMeters) * ratio
-  const rightEast = rightStart.eastMeters + (rightEnd.eastMeters - rightStart.eastMeters) * ratio
-  const rightNorth = rightStart.northMeters + (rightEnd.northMeters - rightStart.northMeters) * ratio
-  const rightUp = rightStart.upMeters + (rightEnd.upMeters - rightStart.upMeters) * ratio
-  return { horizontal: Math.hypot(leftEast - rightEast, leftNorth - rightNorth), vertical: Math.abs(leftUp - rightUp), ratio, conflict: conflictStart <= conflictEnd }
+  // Separation equals the configured limit is permitted. A shared boundary
+  // alone is not an interval during which both limits are violated.
+  if (conflictStart >= conflictEnd) return null
+  const denominator = relativeVelocityEast ** 2 + relativeVelocityNorth ** 2
+  const closestRatio = denominator === 0
+    ? conflictStart
+    : -(relativeStartEast * relativeVelocityEast + relativeStartNorth * relativeVelocityNorth) / denominator
+  const ratio = Math.max(conflictStart, Math.min(conflictEnd, closestRatio))
+  return {
+    horizontal: Math.hypot(relativeStartEast + relativeVelocityEast * ratio, relativeStartNorth + relativeVelocityNorth * ratio),
+    startRatio: conflictStart
+  }
 }
 
-function quadraticInterval(x0: number, y0: number, vx: number, vy: number, limit: number): [number, number] {
+function quadraticInterval(x0: number, y0: number, vx: number, vy: number, limit: number): [number, number] | null {
   const a = vx * vx + vy * vy
   const b = 2 * (x0 * vx + y0 * vy)
   const c = x0 * x0 + y0 * y0 - limit * limit
-  if (a < Number.EPSILON) return c <= 0 ? [0, 1] : [1, 0]
+  if (a === 0) return c < 0 ? [0, 1] : null
   const discriminant = b * b - 4 * a * c
-  if (discriminant < 0) return c <= 0 ? [0, 1] : [1, 0]
+  if (discriminant <= 0) return null
   const root = Math.sqrt(discriminant)
-  return [Math.max(0, Math.min(1, (-b - root) / (2 * a))), Math.min(1, Math.max(0, (-b + root) / (2 * a)))]
+  return clipInterval((-b - root) / (2 * a), (-b + root) / (2 * a))
 }
 
-function linearAbsoluteInterval(start: number, velocity: number, limit: number): [number, number] {
-  if (Math.abs(velocity) < Number.EPSILON) return Math.abs(start) <= limit ? [0, 1] : [1, 0]
+function linearAbsoluteInterval(start: number, velocity: number, limit: number): [number, number] | null {
+  if (velocity === 0) return Math.abs(start) < limit ? [0, 1] : null
   const first = (-limit - start) / velocity
   const second = (limit - start) / velocity
-  return [Math.max(0, Math.min(1, Math.min(first, second))), Math.min(1, Math.max(0, Math.max(first, second)))]
+  return clipInterval(Math.min(first, second), Math.max(first, second))
+}
+
+function clipInterval(start: number, end: number): [number, number] | null {
+  const lower = Math.max(0, start)
+  const upper = Math.min(1, end)
+  return lower < upper ? [lower, upper] : null
 }
 
 export function isShowProgramManifest(value: unknown): value is ShowProgramManifest {
@@ -264,7 +263,7 @@ export function isShowProgramManifest(value: unknown): value is ShowProgramManif
 
 function parseRow(row: Record<string, string>, rowNumber: number): ParsedRow {
   const aircraftId = String(row.aircraft_id ?? "").trim()
-  if (!aircraftId || aircraftId.length > 80 || !/^[A-Za-z0-9._:-]+$/.test(aircraftId)) throw new Error(`第 ${rowNumber} 行 aircraft_id 无效`)
+  if (!aircraftId || aircraftId.length > 80 || !/^[A-Za-z0-9._:/-]+$/.test(aircraftId)) throw new Error(`第 ${rowNumber} 行 aircraft_id 无效`)
   const sourceTimeMs = integer(row.time_ms, `第 ${rowNumber} 行 time_ms`, 0, 86_400_000)
   return {
     aircraftId,
@@ -368,6 +367,7 @@ function canonicalHeader(value: string): string {
 }
 
 function number(value: unknown, label: string, minimum: number, maximum: number): number {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} 不能为空`)
   const normalized = Number(value)
   if (!Number.isFinite(normalized) || normalized < minimum || normalized > maximum) throw new Error(`${label} 必须在 ${minimum} 到 ${maximum} 之间`)
   return normalized

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
 import { dirname, join, relative, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { browserLongRunQualification, browserScaleQualification, classConcurrencyFormalQualification } from "./delivery-qualification.mjs"
 import { browserEvidencePath, mergeBrowserRuntimeEvidence } from "./evidence-selection.mjs"
 
@@ -9,7 +10,9 @@ const outputPath = resolve(argument("output") ?? `artifacts/acceptance/acceptanc
 const markdownPath = resolve(argument("markdown") ?? outputPath.replace(/\.json$/i, ".md"))
 const evidenceFiles = await collectJsonFiles(artifactsRoot)
 const evidence = await loadEvidence(evidenceFiles)
-const mapEvidence = await inspectMapReadiness(resolve(process.env.MAP_DATA_DIR ?? "data/map"))
+const workspaceRoot = fileURLToPath(new URL("../", import.meta.url))
+const mapRoot = resolve(workspaceRoot, process.env.MAP_DATA_DIR?.trim() || "apps/web/dist/map")
+const mapEvidence = await inspectMapReadiness(mapRoot)
 const classFormal = classConcurrencyFormalQualification(evidence.classConcurrency, {
   minimumStudents: process.env.ACCEPTANCE_CLASS_MIN_STUDENTS,
   minimumRounds: process.env.ACCEPTANCE_CLASS_MIN_ROUNDS,
@@ -286,22 +289,23 @@ function targetEnvironmentMessage(value) {
 
 async function inspectMapReadiness(mapRoot) {
   const regionsRoot = resolve(mapRoot, "regions")
+  const mapDirectory = relative(workspaceRoot, mapRoot).replaceAll("\\", "/") || "."
   const entries = await readdir(regionsRoot, { withFileTypes: true }).catch(() => [])
   const regionDirectories = entries.filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
   if (regionDirectories.length === 0) {
     return {
       status: "PENDING",
       message: "当前仓库未归档真实授权 quantized-mesh、离线影像瓦片和区域高程采样快照",
-      evidence: "data/map"
+      evidence: mapDirectory
     }
   }
-  const regions = await Promise.all(regionDirectories.map((entry) => inspectMapRegion(join(regionsRoot, entry.name))))
+  const regions = await Promise.all(regionDirectories.map((entry) => inspectMapRegion(join(regionsRoot, entry.name), entry.name)))
   const invalid = regions.filter((region) => region.status === "FAIL")
   if (invalid.length > 0) {
     return {
       status: "FAIL",
       message: `地图区域资源校验失败：${invalid.map((region) => `${region.regionCode}（${region.message}）`).join("；")}`,
-      evidence: "data/map"
+      evidence: mapDirectory
     }
   }
   const readyByScene = new Set(regions.filter((region) => region.status === "PASS").map((region) => region.sceneType))
@@ -309,18 +313,17 @@ async function inspectMapReadiness(mapRoot) {
     return {
       status: "PASS",
       message: `表演区域 ${regions.filter((region) => region.sceneType === "CITY_SHOW" && region.status === "PASS").length} 块、物流区域 ${regions.filter((region) => region.sceneType === "CITY_LOGISTICS" && region.status === "PASS").length} 块、垂起区域 ${regions.filter((region) => region.sceneType === "VTOL_INSPECTION" && region.status === "PASS").length} 块均通过本地地图资源门禁`,
-      evidence: "data/map"
+      evidence: mapDirectory
     }
   }
   return {
     status: "PENDING",
     message: `已发现 ${regions.length} 块区域，但尚未同时准备三个场景的正式资源`,
-    evidence: "data/map"
+    evidence: mapDirectory
   }
 }
 
-async function inspectMapRegion(regionRoot) {
-  const regionCode = relative(resolve(process.env.MAP_DATA_DIR ?? "data/map", "regions"), regionRoot).replaceAll("\\", "/")
+async function inspectMapRegion(regionRoot, regionCode) {
   const descriptorPath = resolve(regionRoot, "package", "region-package.json")
   const descriptor = await readJson(descriptorPath)
   const content = descriptor?.content

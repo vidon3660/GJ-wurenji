@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common"
 import { ServeStaticModule } from "@nestjs/serve-static"
 import { TypeOrmModule } from "@nestjs/typeorm"
 import { AuthModule } from "./auth/auth.module.js"
-import { resolveWorkspacePath } from "./config/runtime-paths.js"
+import { resolveMapDataPath, resolveWorkspacePath } from "./config/runtime-paths.js"
 import { entities, PracticeEntity, UserEntity } from "./entities.js"
 import { EducationModule } from "./education/education.module.js"
 import { educationEntities } from "./education/education.entities.js"
@@ -46,7 +46,7 @@ import { v3VtlRuntimeEntities } from "./v3/vtl-runtime/vtl-runtime.entities.js"
     ServeStaticModule.forRoot({
       // The production build copies the bundled offline teaching map into web/dist/map.
       // Keep MAP_DATA_DIR as an override for deployments that mount an external map volume.
-      rootPath: resolveWorkspacePath(process.env.MAP_DATA_DIR, "apps/web/dist/map"),
+      rootPath: resolveMapDataPath(),
       serveRoot: "/map",
       exclude: ["/api/{*path}"],
       serveStaticOptions: {
