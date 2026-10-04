@@ -52,8 +52,8 @@ const V3VtlPlanningWorkspace = defineAsyncComponentWithLoading(() => import("./V
 const V3VtlRuntimeWorkspace = defineAsyncComponentWithLoading(() => import("./V3VtlRuntimeWorkspace.vue"))
 const V3VtlReviewWorkspace = defineAsyncComponentWithLoading(() => import("./V3VtlReviewWorkspace.vue"))
 
-const props = defineProps<{ user: AuthUser; projectId: string; initialAlertId?: string }>()
-const emit = defineEmits<{ back: []; onboardingAction: [action: "stage-started" | "simulation-opened"] }>()
+const props = defineProps<{ user: AuthUser; projectId: string; initialAlertId?: string; initialOpenQuestionnaire?: boolean }>()
+const emit = defineEmits<{ back: []; onboardingAction: [action: "stage-started" | "simulation-opened" | "questionnaire-submitted"] }>()
 const loading = ref(false)
 const project = ref<StudentProjectView | null>(null)
 const snapshot = ref<AssignmentSnapshotView | null>(null)
@@ -230,8 +230,9 @@ async function loadProject() {
       ?? (focusedAlert.value && value.stages.some((stage) => stage.stageCode === focusedAlert.value?.stageCode)
       ? focusedAlert.value.stageCode
       : value.currentStageCode)
-    questionnaireVisible.value = false
+    questionnaireVisible.value = props.initialOpenQuestionnaire === true && Boolean(snapshot.value.config.questionBankVersionId)
     await Promise.all([loadActivities(), loadQuestionnaire()])
+    notifyQuestionnaireResultViewed()
     serviceState.value = "CONNECTED"
   } catch (error) {
     serviceState.value = "ERROR"
@@ -262,10 +263,22 @@ async function openQuestionnaire() {
   if (!questionnaireEntryVisible.value) return
   questionnaireVisible.value = true
   await loadQuestionnaire(true)
+  notifyQuestionnaireResultViewed()
+}
+
+function notifyQuestionnaireResultViewed() {
+  if (!isStudent.value) return
+  const status = questionnaire.value?.attempt?.status
+  if (status === "SUBMITTED" || status === "GRADED" || status === "REVIEWED") emit("onboardingAction", "questionnaire-submitted")
 }
 
 function handleQuestionnaireUpdated(value: QuestionnaireView) {
   questionnaire.value = value
+}
+
+function handleQuestionnaireSubmitted(value: QuestionnaireView) {
+  questionnaire.value = value
+  emit("onboardingAction", "questionnaire-submitted")
 }
 
 async function startSelectedStage() {
@@ -775,6 +788,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
       :loading="questionnaireLoading"
       @update:visible="questionnaireVisible = $event"
       @updated="handleQuestionnaireUpdated"
+      @submitted="handleQuestionnaireSubmitted"
       @retry="loadQuestionnaire(true)"
     />
   </div>
