@@ -12,6 +12,8 @@ export function projectSimulationStage(project: StudentProjectView | null | unde
   if (!project) return null
   const candidates = project.stages.filter((stage) => simulationStageCodes.has(stage.stageCode))
   return candidates.find((stage) => stage.stageCode === project.currentStageCode)
+    ?? candidates.find((stage) => stage.status === "IN_PROGRESS" || stage.status === "RETURNED")
+    ?? candidates.find((stage) => stage.status === "AVAILABLE")
     ?? candidates.find((stage) => stage.status !== "LOCKED")
     ?? candidates[0]
     ?? null
@@ -25,7 +27,8 @@ export function simulationEntryStatus(stage: StudentProjectStageView | null | un
   if (!stage) return "待开放"
   if (stage.status === "LOCKED") return stage.openCondition ? `待开放 · ${stage.openCondition}` : "待开放 · 完成前置阶段后开放"
   if (stage.status === "AVAILABLE") return "可进入"
-  if (stage.status === "IN_PROGRESS" || stage.status === "RETURNED") return "运行中"
+  if (stage.status === "RETURNED") return "待修改"
+  if (stage.status === "IN_PROGRESS") return "运行中"
   if (stage.status === "SUBMITTED") return "待评分"
   return "已完成"
 }

@@ -94,10 +94,11 @@ export function advanceRuntimePlaybackTime(
   rate: number,
   durationMs: number
 ): number {
-  const current = clamp(currentTimeMs, 0, Math.max(0, durationMs))
+  const duration = Math.max(0, Number.isFinite(durationMs) ? durationMs : 0)
+  const current = clamp(Number.isFinite(currentTimeMs) ? currentTimeMs : 0, 0, duration)
   const elapsed = Math.max(0, Number.isFinite(elapsedRealMs) ? elapsedRealMs : 0)
   const normalizedRate = Math.max(0, Number.isFinite(rate) ? rate : 0)
-  return clamp(current + elapsed * normalizedRate, 0, Math.max(0, durationMs))
+  return clamp(current + elapsed * normalizedRate, 0, duration)
 }
 
 export function runtimeTimelineMarkers(events: readonly RuntimeMarkerEvent[], durationMs: number): RuntimeTimelineMarker[] {
