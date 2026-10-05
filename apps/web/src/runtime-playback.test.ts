@@ -21,6 +21,13 @@ import {
 } from "./runtime-playback"
 
 describe("runtime playback", () => {
+  it.each([NaN, Infinity, -Infinity])("keeps the shared playback clock finite for %s", (invalid) => {
+    expect(advanceRuntimePlaybackTime(invalid, 500, 2, 10_000)).toBe(1_000)
+    expect(advanceRuntimePlaybackTime(1_000, 500, 2, invalid)).toBe(0)
+    expect(advanceRuntimePlaybackTime(1_000, invalid, 2, 10_000)).toBe(1_000)
+    expect(advanceRuntimePlaybackTime(1_000, 500, invalid, 10_000)).toBe(1_000)
+  })
+
   it("advances and clamps the local playback clock", () => {
     expect(advanceRuntimePlaybackTime(1_000, 500, 4, 10_000)).toBe(3_000)
     expect(advanceRuntimePlaybackTime(9_500, 500, 4, 10_000)).toBe(10_000)

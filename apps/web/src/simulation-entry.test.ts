@@ -3,6 +3,24 @@ import { describe, expect, it } from "vitest"
 import { isSimulationStage, projectSimulationStage, simulationEntryCondition, simulationEntryStatus } from "./simulation-entry"
 
 describe("student simulation entry", () => {
+  it.each([
+    ["CITY_LOGISTICS", "LOGISTICS_DELIVERY_RUNTIME", "LOGISTICS_EMERGENCY_HANDLING"],
+    ["VTOL_INSPECTION", "VTL_RUNTIME", "VTL_EMERGENCY_HANDLING"]
+  ] as const)("prioritizes the actionable %s stage over accepted history", (sceneType, completed, next) => {
+    for (const status of ["AVAILABLE", "IN_PROGRESS", "RETURNED"] as const) {
+      const project = {
+        sceneType,
+        currentStageCode: "REVIEW",
+        stages: [stage(completed, "ACCEPTED"), stage(next, status)]
+      } as unknown as StudentProjectView
+      expect(projectSimulationStage(project)?.stageCode).toBe(next)
+    }
+  })
+
+  it("labels returned work as needing changes instead of running", () => {
+    expect(simulationEntryStatus(stage("SHOW_RUNTIME", "RETURNED"))).toBe("待修改")
+  })
+
   it("finds the explicit show runtime stage even while it is locked", () => {
     const project = {
       sceneType: "CITY_SHOW",
