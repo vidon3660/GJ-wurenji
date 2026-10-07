@@ -70,6 +70,7 @@ const emit = defineEmits<{
 }
 
 .v3-map-view-controls button {
+  flex: 0 0 30px;
   display: grid;
   width: 30px;
   height: 30px;
@@ -88,6 +89,8 @@ const emit = defineEmits<{
 }
 
 .v3-map-view-mode {
+  flex: 0 0 auto;
+  padding: 0 4px;
   min-width: 60px;
   color: #2a6d50;
   font-size: 11px;
@@ -97,7 +100,8 @@ const emit = defineEmits<{
   white-space: nowrap;
 }
 
-.v3-map-view-controls > span {
+.v3-map-view-controls > span:not(.v3-map-view-mode) {
+  flex: 0 0 1px;
   width: 1px;
   height: 22px;
   margin: 0 2px;

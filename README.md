@@ -34,6 +34,8 @@
 
 仿真快捷入口优先保持当前运行阶段；当前阶段不属于仿真时，优先打开进行中、退回修改或已开放的运行阶段，再回到历史记录。退回方案显示“待修改”。物流、表演和垂起巡检共用的回放时钟会将无效时长归零，并恢复无效当前时间，避免进度条与地图态势传播 `NaN`。此修复不改变服务端运行结果和阶段开放权限。
 
+巡检规划和物流调度的未保存修改会在切换阶段、进入仿真、返回首页或重新连接前提示确认；取消后继续保留输入。巡检切换航空器也使用相同保护，完成航线规划会先保存当前编辑，保存失败时保留草稿并允许重试。二维/三维切换保留当前编辑；切换完成及地图资源重载会解除旧监听，避免重复操作后旧相机状态回写。
+
 ## 结果如何计算
 
 各场景使用任务发布时冻结的资源和参数，但计算模型不同，不能将通用仿真包支持的所有字段等同于每个工作台都已实现：
@@ -166,8 +168,11 @@ npm run dev
 | 备份校验 | `npm run backup:verify -- --input data/backups/<恢复点目录>` |
 | 教师区域地图/学生列表浏览器检查 | `npm run visual:smoke` |
 | 浏览器三场景响应式检查 | `npm run accessibility:v3-runtime:browser` |
+| 本地规划草稿与地图切换回归 | `npm run acceptance:planning-draft:browser` |
 
 根目录的运行、备份和浏览器验收命令会自动加载 `.env`，显式环境变量优先。浏览器脚本使用 `playwright-core`，不会下载 Chrome/Chromium。执行前设置 `CHROME_PATH`，并启动应用、准备演示账号和对应场景夹具；脚本结果写入 `artifacts/`。`visual:smoke` 登录真实教师/学生账号，检查 V3 教师预设区域地图与学生任务列表；教师输出 `coverage=V3_REGION_MAP_2D_3D` 表示地图已加载，`V3_REGION_CATALOG_EMPTY` 表示当前没有区域可供检查。设置 `VISUAL_TEACHER_EMAIL`/`VISUAL_STUDENT_EMAIL` 和对应的 `VISUAL_*_PASSWORD` 可以覆盖演示账号，密码未覆盖时使用 `.env` 的 `DEMO_*_PASSWORD`。`accessibility:v3-runtime:browser` 需要三种场景的运行夹具，检查运行区布局与控件。旧 `accessibility:browser` 保留用于历史 V2 界面，不作为当前 V3 验收入口。
+
+本地规划回归脚本不需要数据库、账号或启动后端：先执行 `npm run build --workspace @wurenji/shared` 和 `npm run build --workspace @wurenji/simulation`，再运行 `CHROME_PATH=/usr/bin/chromium npm run acceptance:planning-draft:browser`。脚本自启 Vite，在真实 Chromium、Vue、Element Plus 和 Cesium 中检查 1440/390 宽度的取消返回、航机切换、重复保存、断网重试及连续二维/三维切换，报告与截图写入 `artifacts/planning-draft-browser/`。所有 API 使用本地测试夹具，地图使用轻量教学资源；此检查不包含真实数据库、后端校验、正式影像/DEM或学校 GPU 验收。
 
 ## 地图和关键环境变量
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { ElMessage } from "element-plus"
+import { ElMessage, ElMessageBox } from "element-plus"
 import { ArrowLeft, ArrowRight, Check, CircleCheck, Close, Delete, EditPen, MapLocation, Plus, RefreshRight, Right, Sort, UploadFilled, VideoPause, VideoPlay, Warning } from "@element-plus/icons-vue"
 import type {
   AuthUser,
@@ -67,6 +67,8 @@ const previewTimeMs = ref(0)
 const previewPlaying = ref(false)
 const previewRate = ref(20)
 const draftDirty = ref(false)
+const aircraftSelectionPending = ref(false)
+const routeOperationPending = ref(false)
 let previewTimer: number | null = null
 let workspaceRequest = 0
 let workspaceAbortController: AbortController | undefined
@@ -138,11 +140,18 @@ onBeforeUnmount(() => {
   workspaceRequest += 1
   workspaceAbortController?.abort()
 })
-watch(() => props.project.id, loadWorkspace)
+watch(() => props.project.id, () => {
+  aircraftSelectionPending.value = false
+  routeOperationPending.value = false
+  void loadWorkspace()
+})
 watch(() => props.stage.revision, loadWorkspace)
 watch(draftDirty, (value) => emit("dirtyChange", value), { immediate: true })
 watch(selectedAircraftId, loadSelectedRoute)
-watch(selectedTaskId, () => {
+watch(selectedTaskId, (_taskId, previousTaskId) => {
+  // Persist the edited group before loading another task's local draft.
+  const previousZone = taskZones.value.find((zone) => zone.taskObjectIds.includes(previousTaskId))
+  if (previousZone && draftDirty.value) previousZone.groupId = zoneGroupId.value || null
   zoneDrawMode.value = false
   loadSelectedZone()
 })
@@ -158,7 +167,9 @@ watch(() => props.stage.stageCode, () => {
 watch(() => workspace.value?.plan.revision, resetPreview)
 
 async function loadWorkspace() {
-  if (disposed) return
+  // A background stage refresh must not replace unsaved input. A successful
+  // save supplies the latest revision; an explicit project reload remounts us.
+  if (disposed || (workspace.value?.projectId === props.project.id && draftDirty.value)) return
   const requestId = ++workspaceRequest
   workspaceAbortController?.abort()
   const abortController = new AbortController()
@@ -268,16 +279,21 @@ function speedForPhase(phase: VtlFlightPhase) {
 }
 
 async function request<T>(path: string, options: RequestInit = {}, refresh = false) {
+  if (loading.value || disposed) return null
+  const projectId = props.project.id
+  const requestId = workspaceRequest
+  const isCurrent = () => !disposed && props.project.id === projectId && requestId === workspaceRequest
   loading.value = true
   try {
     const value = await api<T>(path, options)
+    if (!isCurrent()) return null
     if (refresh) emit("refreshProject")
     return value
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "操作失败")
+    if (isCurrent()) ElMessage.error(error instanceof Error ? error.message : "操作失败")
     return null
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -485,13 +501,57 @@ function changeAircraftGroup(assignment: VtlAircraftAssignmentView, groupId: str
   markDraftDirty()
 }
 
-async function saveRoute() {
-  if (!workspace.value || !selectedAircraftId.value || routeWaypoints.value.length === 0) return
+async function selectAircraft(aircraftId: string) {
+  if (aircraftSelectionPending.value || routeOperationPending.value || loading.value || disposed || aircraftId === selectedAircraftId.value) return
+  if (!assignments.value.some((assignment) => assignment.aircraftId === aircraftId)) return
+  const projectId = props.project.id
+  const previousAircraftId = selectedAircraftId.value
+  aircraftSelectionPending.value = true
+  try {
+    if (props.stage.stageCode === "VTL_ROUTE_PLANNING" && draftDirty.value) {
+      await ElMessageBox.confirm("当前航空器有未保存的航线修改，切换后这些修改会丢失。", "确认切换航空器", {
+        confirmButtonText: "切换航空器",
+        cancelButtonText: "继续编辑",
+        type: "warning"
+      })
+    }
+    if (disposed || props.project.id !== projectId || selectedAircraftId.value !== previousAircraftId) return
+    if (props.stage.stageCode === "VTL_ROUTE_PLANNING") draftDirty.value = false
+    selectedAircraftId.value = aircraftId
+  } catch {
+    // Cancellation keeps the current aircraft and all of its edited fields.
+  } finally {
+    if (props.project.id === projectId) aircraftSelectionPending.value = false
+  }
+}
+
+function selectAircraftFromInput(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const aircraftId = select.value
+  select.value = selectedAircraftId.value
+  void selectAircraft(aircraftId)
+}
+
+async function persistRoute(): Promise<boolean> {
+  if (!workspace.value?.canEditRoutes || !selectedAircraftId.value || routeWaypoints.value.length === 0) return false
   const value = await request<VtlPlanningWorkspaceView>(`/v3/vtl-projects/${props.project.id}/routes/${selectedAircraftId.value}`, {
     method: "PUT",
     body: JSON.stringify({ expectedRevision: workspace.value.plan.revision, transitionHeightMeters: routeTransitionHeight.value, alternateLandingSiteId: routeAlternateSiteId.value, waypoints: routeWaypoints.value })
   })
-  if (value) applyWorkspace(value)
+  if (!value) return false
+  applyWorkspace(value)
+  return true
+}
+
+async function saveRoute(): Promise<boolean> {
+  if (routeOperationPending.value || aircraftSelectionPending.value || loading.value || disposed) return false
+  const projectId = props.project.id
+  routeOperationPending.value = true
+  try {
+    return await persistRoute()
+  } finally {
+    if (props.project.id === projectId) routeOperationPending.value = false
+  }
 }
 
 function updateRouteWaypoint(aircraftId: string, waypointId: string, position: Pick<V3Coordinate, "longitude" | "latitude">) {
@@ -501,9 +561,17 @@ function updateRouteWaypoint(aircraftId: string, waypointId: string, position: P
 }
 
 async function completeRoutes() {
-  if (!workspace.value) return
-  const value = await request<VtlPlanningWorkspaceView>(`/v3/vtl-projects/${props.project.id}/routes/complete`, { method: "POST", body: JSON.stringify({ expectedRevision: workspace.value.plan.revision }) }, true)
-  if (value) applyWorkspace(value)
+  if (!workspace.value?.canEditRoutes || routeOperationPending.value || aircraftSelectionPending.value || loading.value || disposed) return
+  const projectId = props.project.id
+  routeOperationPending.value = true
+  try {
+    if (draftDirty.value && !await persistRoute()) return
+    if (disposed) return
+    const value = await request<VtlPlanningWorkspaceView>(`/v3/vtl-projects/${props.project.id}/routes/complete`, { method: "POST", body: JSON.stringify({ expectedRevision: workspace.value.plan.revision }) }, true)
+    if (value) applyWorkspace(value)
+  } finally {
+    if (props.project.id === projectId) routeOperationPending.value = false
+  }
 }
 
 async function validatePlan() {
@@ -605,8 +673,8 @@ function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
         <button v-if="props.stage.stageCode === 'VTL_AREA_OBJECTS' && workspace?.canConfirmArea" type="button" class="primary" @click="confirmArea"><el-icon><Check /></el-icon>确认区域</button>
         <button v-if="props.stage.stageCode === 'VTL_TASK_ALLOCATION' && workspace?.canEditAllocation" type="button" @click="saveAllocation"><el-icon><RefreshRight /></el-icon>保存分配</button>
         <button v-if="props.stage.stageCode === 'VTL_TASK_ALLOCATION' && workspace?.canSubmitAllocation" type="button" class="primary" @click="submitAllocation"><el-icon><UploadFilled /></el-icon>提交分区分配</button>
-        <button v-if="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && workspace?.canEditRoutes" type="button" @click="saveRoute"><el-icon><EditPen /></el-icon>保存航线</button>
-        <button v-if="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && workspace?.canEditRoutes" type="button" class="primary" @click="completeRoutes"><el-icon><Right /></el-icon>完成航线规划</button>
+        <button v-if="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && workspace?.canEditRoutes" type="button" :disabled="loading || routeOperationPending || aircraftSelectionPending" @click="saveRoute"><el-icon><EditPen /></el-icon>保存航线</button>
+        <button v-if="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && workspace?.canEditRoutes" type="button" class="primary" :disabled="loading || routeOperationPending || aircraftSelectionPending" @click="completeRoutes"><el-icon><Right /></el-icon>完成航线规划</button>
         <button v-if="previewEnabled" type="button" @click="togglePreview"><el-icon><VideoPause v-if="previewPlaying" /><VideoPlay v-else /></el-icon>{{ previewPlaying ? '暂停预演' : '方案预演' }}</button>
         <button v-if="props.stage.stageCode === 'VTL_PLAN_VALIDATION' && workspace?.canValidate" type="button" @click="validatePlan"><el-icon><Check /></el-icon>执行检查</button>
         <button v-if="props.stage.stageCode === 'VTL_PLAN_VALIDATION' && workspace?.canSubmitValidation" type="button" class="primary" @click="submitValidation"><el-icon><UploadFilled /></el-icon>提交检查结果</button>
@@ -622,7 +690,7 @@ function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
     </section>
 
     <main v-if="workspace || !loadError" class="vtl-planning-map" :class="{ 'preview-active': previewEnabled }">
-      <V3UnifiedMap :region="region" :visible-layers="visibleLayers" :mode="mapMode" :vtl-plan="plan" :vtl-selected-aircraft-id="selectedAircraftId" :vtl-task-zones="taskZones" :vtl-selected-task-id="selectedTaskId" :selected-map-feature-id="selectedMapFeatureId" :vtl-allocation-editable="allocationMapEditable" :vtl-zone-draw-mode="zoneDrawMode" :vtl-route-editable="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && Boolean(workspace?.canEditRoutes)" :vtl-editing-aircraft-id="selectedAircraftId" :vtl-editing-waypoints="routeWaypoints" :vtl-runtime="previewProjection" @data-state="emit('dataState', $event)" @vtl-task-select="selectedTaskId = $event" @vtl-zone-draw-complete="finishMapZone" @vtl-zone-draw-cancel="zoneDrawMode = false" @vtl-zone-updated="updateZoneBoundary" @vtl-waypoint-updated="updateRouteWaypoint" />
+      <V3UnifiedMap :region="region" :visible-layers="visibleLayers" :mode="mapMode" :vtl-plan="plan" :vtl-selected-aircraft-id="selectedAircraftId" :vtl-task-zones="taskZones" :vtl-selected-task-id="selectedTaskId" :selected-map-feature-id="selectedMapFeatureId" :vtl-allocation-editable="allocationMapEditable" :vtl-zone-draw-mode="zoneDrawMode" :vtl-route-editable="props.stage.stageCode === 'VTL_ROUTE_PLANNING' && Boolean(workspace?.canEditRoutes) && !loading && !routeOperationPending && !aircraftSelectionPending" :vtl-editing-aircraft-id="selectedAircraftId" :vtl-editing-waypoints="routeWaypoints" :vtl-runtime="previewProjection" @data-state="emit('dataState', $event)" @vtl-task-select="selectedTaskId = $event" @vtl-aircraft-select="selectAircraft" @vtl-zone-draw-complete="finishMapZone" @vtl-zone-draw-cancel="zoneDrawMode = false" @vtl-zone-updated="updateZoneBoundary" @vtl-waypoint-updated="updateRouteWaypoint" />
       <V3EnvironmentLayerPanel :region="region" scene-type="VTOL_INSPECTION" :visible-layers="visibleLayers" @toggle-layer="emit('toggleLayer', $event)" />
       <div class="vtl-map-legend"><span><i class="task" />任务对象</span><span><i class="main-site" />主起降点</span><span><i class="alternate" />备降点</span><span><i class="route" />航线</span></div>
       <div class="vtl-map-caption"><MapLocation /> {{ region.title }} · {{ region.heightDatum }} · {{ props.stage.stageCode === 'VTL_ROUTE_PLANNING' && workspace?.canEditRoutes ? '可拖动航点调整航线' : '规划数据与服务端方案版本同步' }}</div>
@@ -669,10 +737,10 @@ function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T }
         <header><div><span>航线与剖面</span><strong>八阶段航线与能量</strong></div><b>{{ assignments.filter((item) => item.taskObjectIds.length > 0).length }} 架</b></header>
         <div v-if="plan?.checkResult && !plan.checkResult.passed" class="route-recheck-notice"><Warning /><span><strong>上次检查未通过</strong><small>请根据检查结果修改航线，保存后重新执行检查。</small></span></div>
         <template v-if="assignments.some(item => item.taskObjectIds.length > 0)"><label class="field-label">编辑航空器</label>
-        <select v-model="selectedAircraftId"><option v-for="assignment in assignments.filter(item => item.taskObjectIds.length > 0)" :key="assignment.aircraftId" :value="assignment.aircraftId">{{ assignment.aircraftCode }} · {{ assignment.taskObjectIds.length }} 个对象</option></select></template><div v-else class="planning-empty-state" role="status"><strong>暂无可编辑航线的航空器</strong><span>请先在“分区与航空器分配”阶段为至少一个任务对象分配航空器。</span></div>
-         <div class="route-parameters"><label>转换高度<input v-model.number="routeTransitionHeight" type="number" min="1" @input="markDraftDirty" /> m</label><label>备降点<select v-model="routeAlternateSiteId" @change="markDraftDirty"><option v-for="site in plan?.landingSites.filter(item => item.type === 'ALTERNATE' && item.status === 'AVAILABLE') ?? []" :key="site.id" :value="site.id">{{ site.title }}</option></select></label></div>
+        <select :value="selectedAircraftId" :disabled="loading || routeOperationPending || aircraftSelectionPending" aria-label="编辑航空器" @change="selectAircraftFromInput"><option v-for="assignment in assignments.filter(item => item.taskObjectIds.length > 0)" :key="assignment.aircraftId" :value="assignment.aircraftId">{{ assignment.aircraftCode }} · {{ assignment.taskObjectIds.length }} 个对象</option></select></template><div v-else class="planning-empty-state" role="status"><strong>暂无可编辑航线的航空器</strong><span>请先在“分区与航空器分配”阶段为至少一个任务对象分配航空器。</span></div>
+         <div class="route-parameters"><label>转换高度<input v-model.number="routeTransitionHeight" :disabled="!workspace?.canEditRoutes || loading || routeOperationPending || aircraftSelectionPending" type="number" min="1" @input="markDraftDirty" /> m</label><label>备降点<select v-model="routeAlternateSiteId" :disabled="!workspace?.canEditRoutes || loading || routeOperationPending || aircraftSelectionPending" @change="markDraftDirty"><option v-for="site in plan?.landingSites.filter(item => item.type === 'ALTERNATE' && item.status === 'AVAILABLE') ?? []" :key="site.id" :value="site.id">{{ site.title }}</option></select></label></div>
         <div class="phase-strip"><span v-for="waypoint in routeWaypoints" :key="waypoint.id" :class="waypoint.phase.toLowerCase()"><b>{{ waypoint.sequence + 1 }}</b><small>{{ phaseLabel(waypoint.phase) }}</small></span></div>
-         <div class="waypoint-list"><article v-for="waypoint in routeWaypoints" :key="waypoint.id"><header><strong>{{ waypoint.sequence + 1 }} · {{ phaseLabel(waypoint.phase) }}</strong><em>{{ waypoint.taskObjectId ? taskLabel(waypoint.taskObjectId) : '航段控制点' }}</em></header><div><label>经度<input v-model.number="waypoint.position.longitude" type="number" step="0.000001" :disabled="!workspace?.canEditRoutes" @input="markDraftDirty" /></label><label>纬度<input v-model.number="waypoint.position.latitude" type="number" step="0.000001" :disabled="!workspace?.canEditRoutes" @input="markDraftDirty" /></label><label>高度<input v-model.number="waypoint.altitudeMeters" type="number" min="1" :disabled="!workspace?.canEditRoutes" @input="markDraftDirty" /></label></div></article></div>
+         <div class="waypoint-list"><article v-for="waypoint in routeWaypoints" :key="waypoint.id"><header><strong>{{ waypoint.sequence + 1 }} · {{ phaseLabel(waypoint.phase) }}</strong><em>{{ waypoint.taskObjectId ? taskLabel(waypoint.taskObjectId) : '航段控制点' }}</em></header><div><label>经度<input v-model.number="waypoint.position.longitude" type="number" step="0.000001" :disabled="!workspace?.canEditRoutes || loading || routeOperationPending || aircraftSelectionPending" @input="markDraftDirty" /></label><label>纬度<input v-model.number="waypoint.position.latitude" type="number" step="0.000001" :disabled="!workspace?.canEditRoutes || loading || routeOperationPending || aircraftSelectionPending" @input="markDraftDirty" /></label><label>高度<input v-model.number="waypoint.altitudeMeters" type="number" min="1" :disabled="!workspace?.canEditRoutes || loading || routeOperationPending || aircraftSelectionPending" @input="markDraftDirty" /></label></div></article></div>
         <div v-if="selectedRoute" class="route-result"><span>总距离 <strong>{{ formatDistance(selectedRoute.totalDistanceMeters) }}</strong></span><span>预计用时 <strong>{{ formatSeconds(selectedRoute.totalDurationSeconds) }}</strong></span><span>能量 <strong>{{ formatEnergy(selectedRoute.totalEnergyWh) }}</strong></span><span :class="{ danger: terrainProfileRisk }">最低净空 <strong>{{ lowestClearance === null ? '-' : `${Math.round(lowestClearance)} m` }}</strong></span></div>
         <div v-if="selectedRoute" class="route-analytics">
           <section v-if="alternateComparison" class="alternate-comparison-panel">

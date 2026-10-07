@@ -20,12 +20,24 @@ export async function loadV3MapResources(
   const removeRegionConstraints = options.manageRegionConstraints === false
     ? null
     : configureRegionMapConstraints(viewer, region)
-  const [imageryCleanup] = await Promise.all([
+  const [imagery, terrain] = await Promise.allSettled([
     addV3MapImagery(viewer, region, tracker, options),
     loadTerrainForRegion(viewer, region, (terrain) => tracker.setTerrain(terrain), options)
   ])
-  return () => {
-    imageryCleanup()
-    if (options.isCurrent?.() ?? true) removeRegionConstraints?.()
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    if (imagery.status === "fulfilled") imagery.value()
+    removeRegionConstraints?.()
   }
+  if (imagery.status === "rejected") {
+    cleanup()
+    throw imagery.reason
+  }
+  if (terrain.status === "rejected") {
+    cleanup()
+    throw terrain.reason
+  }
+  return cleanup
 }

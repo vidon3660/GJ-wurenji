@@ -78,6 +78,7 @@
     "question-bank:readiness": "node --env-file-if-exists=.env scripts/question-bank-readiness-smoke.mjs",
     "acceptance:questionnaire-progress:browser": "node --env-file-if-exists=.env scripts/questionnaire-progress-browser-acceptance.mjs",
     "acceptance:questionnaire:runtime": "node --env-file-if-exists=.env scripts/questionnaire-runtime-acceptance.mjs",
+    "acceptance:planning-draft:browser": "node scripts/planning-draft-browser-acceptance.mjs",
     "acceptance:onboarding:browser": "node --env-file-if-exists=.env scripts/onboarding-browser-acceptance.mjs",
     "acceptance:stu013:logistics-fixture": "node --env-file-if-exists=.env scripts/prepare-stu013-logistics-browser-fixture.mjs",
     "acceptance:stu013:logistics:browser": "node --env-file-if-exists=.env scripts/logistics-alert-browser-acceptance.mjs",

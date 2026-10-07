@@ -48,6 +48,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   refreshProject: []
+  dirtyChange: [dirty: boolean]
   dataState: [state: V3MapDataState]
   toggleLayer: [code: V3RegionLayerCode]
 }>()
@@ -213,6 +214,7 @@ onBeforeUnmount(() => {
   if (dirty.value) void saveDraft(false, false)
 })
 watch(() => props.project.id, loadWorkspace)
+watch(dirty, (value) => emit("dirtyChange", value), { immediate: true, flush: "sync" })
 watch(items, () => {
   if (applyingWorkspace || !canEdit.value || !dirty.value) return
   saveState.value = "PENDING"

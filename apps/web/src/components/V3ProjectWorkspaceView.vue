@@ -69,7 +69,14 @@ const activityDrawerVisible = ref(false)
 const taskDrawerVisible = ref(false)
 const questionnaireVisible = ref(false)
 const questionnaireLoading = ref(false)
-const vtlPlanningDirty = ref(false)
+const planningDirty = ref(false)
+const workspaceEpoch = ref(0)
+const navigationPending = ref(false)
+let disposed = false
+let projectLoadController: AbortController | undefined
+let questionnaireRequest = 0
+let activitiesRequest = 0
+let stageRequest = 0
 const activitiesLoading = ref(false)
 const serviceState = ref<"CONNECTING" | "CONNECTED" | "ERROR">("CONNECTING")
 const clockNowMs = ref(Date.now())
@@ -190,8 +197,29 @@ onMounted(() => {
   window.addEventListener("beforeunload", handleBeforeUnload)
 })
 onBeforeUnmount(() => {
+  disposed = true
+  projectLoadController?.abort()
   if (assessmentClockTimer !== undefined) window.clearInterval(assessmentClockTimer)
   window.removeEventListener("beforeunload", handleBeforeUnload)
+})
+watch(() => props.projectId, () => {
+  projectLoadController?.abort()
+  projectLoadController = undefined
+  questionnaireRequest += 1
+  activitiesRequest += 1
+  stageRequest += 1
+  loading.value = false
+  project.value = null
+  snapshot.value = null
+  region.value = null
+  questionnaire.value = null
+  questionnaireLoading.value = false
+  activities.value = []
+  planningDirty.value = false
+  navigationPending.value = false
+  selectedStageCode.value = ""
+  expiryRefreshRequested.value = false
+  void loadProject()
 })
 watch(region, (value) => {
   const availableLayers = value?.layers
@@ -207,19 +235,33 @@ watch(currentAssessmentRemainingMs, (value) => {
 })
 
 async function loadProject() {
+  if (loading.value || disposed) return
+  const projectId = props.projectId
+  stageRequest += 1
+  const controller = new AbortController()
+  projectLoadController?.abort()
+  projectLoadController = controller
+  const isCurrent = () => !disposed && props.projectId === projectId && projectLoadController === controller
   loading.value = true
   serviceState.value = "CONNECTING"
   try {
-    const value = await api<StudentProjectView>(`/v3/projects/${props.projectId}/stages`)
+    const value = await api<StudentProjectView>(`/v3/projects/${projectId}/stages`, { signal: controller.signal })
+    const nextSnapshot = await api<AssignmentSnapshotView>(`/v3/assignments/${value.assignmentSnapshotId}/snapshot`, { signal: controller.signal })
+    const nextRegion = await api<V3RegionCatalogItem>(`/v3/resource-packages/regions/${nextSnapshot.config.regionPackageId}`, { signal: controller.signal })
+    if (!isCurrent()) return
+    planningDirty.value = false
+    workspaceEpoch.value += 1
     setProject(value)
-    snapshot.value = await api<AssignmentSnapshotView>(`/v3/assignments/${value.assignmentSnapshotId}/snapshot`)
-    region.value = await api<V3RegionCatalogItem>(`/v3/resource-packages/regions/${snapshot.value.config.regionPackageId}`)
+    snapshot.value = nextSnapshot
+    region.value = nextRegion
     focusedAlert.value = null
     if (props.initialAlertId) {
       try {
-        const alerts = await api<V3RuntimeAlertView[]>(`/v3/projects/${props.projectId}/alerts`)
+        const alerts = await api<V3RuntimeAlertView[]>(`/v3/projects/${projectId}/alerts`, { signal: controller.signal })
+        if (!isCurrent()) return
         focusedAlert.value = alerts.find((item) => item.id === props.initialAlertId) ?? null
       } catch {
+        if (!isCurrent()) return
         focusedAlert.value = null
       }
     }
@@ -232,17 +274,23 @@ async function loadProject() {
       : value.currentStageCode)
     questionnaireVisible.value = props.initialOpenQuestionnaire === true && Boolean(snapshot.value.config.questionBankVersionId)
     await Promise.all([loadActivities(), loadQuestionnaire()])
-    notifyQuestionnaireResultViewed()
-    serviceState.value = "CONNECTED"
+    if (isCurrent()) {
+      notifyQuestionnaireResultViewed()
+      serviceState.value = "CONNECTED"
+    }
   } catch (error) {
+    if (!isCurrent() || controller.signal.aborted) return
     serviceState.value = "ERROR"
     ElMessage.error(error instanceof Error ? error.message : "学生项目加载失败")
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
 async function loadQuestionnaire(showError = false) {
+  const requestId = ++questionnaireRequest
+  const projectId = props.projectId
+  const isCurrent = () => !disposed && props.projectId === projectId && requestId === questionnaireRequest
   if (!snapshot.value?.config.questionBankVersionId) {
     questionnaire.value = null
     questionnaireLoading.value = false
@@ -250,12 +298,14 @@ async function loadQuestionnaire(showError = false) {
   }
   questionnaireLoading.value = true
   try {
-    questionnaire.value = await api<QuestionnaireView>(`/v3/projects/${props.projectId}/questionnaire`)
+    const value = await api<QuestionnaireView>(`/v3/projects/${projectId}/questionnaire`)
+    if (isCurrent()) questionnaire.value = value
   } catch (error) {
+    if (!isCurrent()) return
     questionnaire.value = null
     if (showError || questionnaireVisible.value) ElMessage.error(error instanceof Error ? error.message : "场景任务加载失败")
   } finally {
-    questionnaireLoading.value = false
+    if (isCurrent()) questionnaireLoading.value = false
   }
 }
 
@@ -270,7 +320,7 @@ async function openQuestionnaire() {
 }
 
 function notifyQuestionnaireResultViewed() {
-  if (!isStudent.value) return
+  if (!isStudent.value || disposed) return
   const status = questionnaire.value?.attempt?.status
   if (status === "SUBMITTED" || status === "GRADED" || status === "REVIEWED") emit("onboardingAction", "questionnaire-submitted")
 }
@@ -285,29 +335,37 @@ function handleQuestionnaireSubmitted(value: QuestionnaireView) {
 }
 
 async function startSelectedStage() {
-  if (!selectedStage.value || !isStudent.value || (nextAction.value !== "START" && nextAction.value !== "RESUME")) return
+  if (loading.value || navigationPending.value || disposed || !selectedStage.value || !isStudent.value || (nextAction.value !== "START" && nextAction.value !== "RESUME")) return
   const action = nextAction.value
+  const projectId = props.projectId
+  const requestId = ++stageRequest
+  const isCurrent = () => !disposed && props.projectId === projectId && requestId === stageRequest
   loading.value = true
   try {
     const value = await api<StudentProjectView>(`/v3/projects/${props.projectId}/stages/${selectedStage.value.stageCode}/start`, {
       method: "POST",
       body: JSON.stringify({ expectedRevision: selectedStage.value.revision })
     })
+    if (!isCurrent()) return
     setProject(value)
     serviceState.value = "CONNECTED"
     selectedStageCode.value = value.currentStageCode
     await Promise.all([loadActivities(), loadQuestionnaire()])
+    if (!isCurrent()) return
     ElMessage.success(action === "RESUME" ? "已恢复本阶段" : "阶段已开始")
     emit("onboardingAction", "stage-started")
   } catch (error) {
+    if (!isCurrent()) return
     serviceState.value = "ERROR"
     ElMessage.error(error instanceof Error ? error.message : "阶段启动失败")
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
 function applyProjectUpdate(value: StudentProjectView) {
+  if (disposed || value.id !== props.projectId) return
+  stageRequest += 1
   setProject(value)
   void Promise.all([loadActivities(), loadQuestionnaire()])
 }
@@ -319,9 +377,14 @@ function setProject(value: StudentProjectView) {
 }
 
 async function refreshProjectFromSpecializedStage() {
+  if (loading.value || disposed) return
+  const projectId = props.projectId
+  const requestId = ++stageRequest
+  const isCurrent = () => !disposed && props.projectId === projectId && requestId === stageRequest
   serviceState.value = "CONNECTING"
   try {
-    const value = await api<StudentProjectView>(`/v3/projects/${props.projectId}/stages`)
+    const value = await api<StudentProjectView>(`/v3/projects/${projectId}/stages`)
+    if (!isCurrent()) return
     selectedStageCode.value = resolveStageSelectionAfterRefresh(
       selectedStageCode.value,
       project.value?.currentStageCode,
@@ -330,21 +393,26 @@ async function refreshProjectFromSpecializedStage() {
     )
     setProject(value)
     await Promise.all([loadActivities(), loadQuestionnaire()])
-    serviceState.value = "CONNECTED"
+    if (isCurrent()) serviceState.value = "CONNECTED"
   } catch (error) {
+    if (!isCurrent()) return
     serviceState.value = "ERROR"
     ElMessage.error(error instanceof Error ? error.message : "项目阶段刷新失败")
   }
 }
 
 async function loadActivities() {
+  const requestId = ++activitiesRequest
+  const projectId = props.projectId
+  const isCurrent = () => !disposed && props.projectId === projectId && requestId === activitiesRequest
   activitiesLoading.value = true
   try {
-    activities.value = await api<V3ActivityEventView[]>(`/v3/projects/${props.projectId}/activities`)
+    const value = await api<V3ActivityEventView[]>(`/v3/projects/${projectId}/activities`)
+    if (isCurrent()) activities.value = value
   } catch (error) {
-    if (activityDrawerVisible.value) ElMessage.error(error instanceof Error ? error.message : "活动记录加载失败")
+    if (isCurrent() && activityDrawerVisible.value) ElMessage.error(error instanceof Error ? error.message : "活动记录加载失败")
   } finally {
-    activitiesLoading.value = false
+    if (isCurrent()) activitiesLoading.value = false
   }
 }
 
@@ -354,28 +422,49 @@ function toggleLayer(code: V3RegionLayerCode) {
     : [...visibleLayers.value, code]
 }
 
-function openSimulationMode() {
-  if (!simulationStage.value) return
-  selectedStageCode.value = simulationStage.value.stageCode
-  if (simulationStage.value.status === "LOCKED") ElMessage.info(`仿真暂未开放：${simulationEntryCondition(simulationStage.value)}`)
+async function openSimulationMode() {
+  const stage = simulationStage.value
+  if (!stage || !await selectStage(stage.stageCode)) return
+  if (stage.status === "LOCKED") ElMessage.info(`仿真暂未开放：${simulationEntryCondition(stage)}`)
   else emit("onboardingAction", "simulation-opened")
 }
 
-async function selectStage(stageCode: string) {
-  if (stageCode === selectedStageCode.value) return
-  if (vtlPlanningDirty.value && isStudent.value) {
-    try {
-      await ElMessageBox.confirm("当前阶段存在未保存的规划修改，离开后这些修改会丢失。", "确认离开阶段", {
-        confirmButtonText: "离开阶段",
+async function navigateFromPlanning(action: () => void | Promise<void>, title: string, confirmButtonText: string): Promise<boolean> {
+  if (navigationPending.value || disposed) return false
+  navigationPending.value = true
+  const projectId = props.projectId
+  const stageCode = selectedStageCode.value
+  try {
+    if (planningDirty.value && isStudent.value) {
+      await ElMessageBox.confirm("当前阶段存在未保存的规划修改，离开后这些修改可能丢失。", title, {
+        confirmButtonText,
         cancelButtonText: "继续编辑",
         type: "warning"
       })
-    } catch {
-      return
     }
+    if (disposed || props.projectId !== projectId || selectedStageCode.value !== stageCode) return false
+    await action()
+    return true
+  } catch {
+    return false
+  } finally {
+    if (props.projectId === projectId) navigationPending.value = false
   }
-  vtlPlanningDirty.value = false
-  selectedStageCode.value = stageCode
+}
+
+async function selectStage(stageCode: string): Promise<boolean> {
+  if (navigationPending.value || disposed) return false
+  if (stageCode === selectedStageCode.value) return true
+  if (!project.value?.stages.some((stage) => stage.stageCode === stageCode)) return false
+  return navigateFromPlanning(() => {
+    planningDirty.value = false
+    selectedStageCode.value = stageCode
+  }, "确认离开阶段", "离开阶段")
+}
+
+async function retryProject() {
+  if (loading.value) return
+  await navigateFromPlanning(loadProject, "确认重新加载项目", "重新加载")
 }
 
 async function continueFromTaskDrawer() {
@@ -391,23 +480,14 @@ async function continueFromTaskDrawer() {
 }
 
 async function leaveProject() {
-  if (vtlPlanningDirty.value && isStudent.value) {
-    try {
-      await ElMessageBox.confirm("当前阶段存在未保存的规划修改，返回首页后这些修改会丢失。", "确认返回教学首页", {
-        confirmButtonText: "返回首页",
-        cancelButtonText: "继续编辑",
-        type: "warning"
-      })
-    } catch {
-      return
-    }
-  }
-  vtlPlanningDirty.value = false
-  emit("back")
+  await navigateFromPlanning(() => {
+    planningDirty.value = false
+    emit("back")
+  }, "确认返回教学首页", "返回首页")
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
-  if (!vtlPlanningDirty.value || !isStudent.value) return
+  if (!planningDirty.value || !isStudent.value) return
   event.preventDefault()
   event.returnValue = ""
 }
@@ -474,7 +554,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
       <div v-if="stageUsesMap" class="view-segment" aria-label="地图视角"><button type="button" title="2D 精确规划视角" aria-label="2D 精确规划视角" :aria-pressed="mapMode === '2d'" :class="{ active: mapMode === '2d' }" @click="mapMode = '2d'">2D</button><button type="button" title="3D 空间理解视角" aria-label="3D 空间理解视角" :aria-pressed="mapMode === '3d'" :class="{ active: mapMode === '3d' }" @click="mapMode = '3d'">3D</button></div>
     </header>
 
-    <V3ProjectSyncState :state="serviceState" :has-project="Boolean(project)" :loading="loading" @retry="loadProject" />
+    <V3ProjectSyncState :state="serviceState" :has-project="Boolean(project)" :loading="loading" @retry="retryProject" />
 
     <V3ProjectStageNavigation :project="project" :selected-stage-code="selectedStageCode" @select="selectStage" />
 
@@ -508,6 +588,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
 
     <V3LogisticsSchedulingWorkspace
       v-else-if="logisticsSchedulingWorkspaceReady && project && selectedStage && region"
+      :key="`logistics-scheduling-${project.id}-${workspaceEpoch}`"
       :user="user"
       :project="project"
       :stage="selectedStage"
@@ -516,7 +597,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
       :map-mode="mapMode"
       @refresh-project="refreshProjectFromSpecializedStage"
       @resume-stage="startSelectedStage"
-      @dirty-change="vtlPlanningDirty = $event"
+      @dirty-change="planningDirty = $event"
       @data-state="mapState = $event"
       @toggle-layer="toggleLayer"
     />
@@ -543,12 +624,13 @@ function serviceStateLabel(state: typeof serviceState.value): string {
 
     <V3VtlPlanningWorkspace
       v-else-if="vtlPlanningWorkspaceReady && project && selectedStage && region"
-      :key="`vtl-planning-${project.id}-${project.assessmentTiming.state}`"
+      :key="`vtl-planning-${project.id}-${selectedStage.stageCode}-${project.assessmentTiming.state}-${workspaceEpoch}`"
       :user="user"
       :project="project"
       :stage="selectedStage"
       :region="region"
       :main-landing-site-id="snapshot?.config.vtlParameters?.mainLandingSiteId ?? ''"
+      @dirty-change="planningDirty = $event"
       :visible-layers="visibleLayers"
       :map-mode="mapMode"
       @refresh-project="refreshProjectFromSpecializedStage"
@@ -678,7 +760,7 @@ function serviceStateLabel(state: typeof serviceState.value): string {
 
     <footer class="v3-project-statusbar">
       <span class="service-state" :class="serviceState.toLowerCase()" role="status" aria-live="polite">{{ serviceStateLabel(serviceState) }}</span>
-      <button v-if="serviceState === 'ERROR'" class="service-retry" type="button" aria-label="重新连接服务" @click="loadProject"><el-icon><Refresh /></el-icon>重新连接</button>
+      <button v-if="serviceState === 'ERROR'" class="service-retry" type="button" aria-label="重新连接服务" @click="retryProject"><el-icon><Refresh /></el-icon>重新连接</button>
       <template v-if="stageUsesMap">
         <span v-if="region" :class="{ loading: mapState.phase !== 'READY', failed: mapState.imagery === 'FAILED' || mapState.imagery === 'UNAVAILABLE', degraded: mapState.imagery === 'DEGRADED' }">{{ v3MapLoadingLabel(mapState) }}</span>
         <span v-else class="failed">教学区域资源不可用</span>
