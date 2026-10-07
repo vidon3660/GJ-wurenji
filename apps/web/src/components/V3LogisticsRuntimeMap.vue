@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { listenForMapMorphComplete } from "../map-morph-listener"
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue"
 import {
   Cartesian2,
@@ -881,7 +882,7 @@ function setMode(mode: "2d" | "3d", refocus = true) {
   }
   removeMorphCompleteListener?.()
   if (viewer.scene.mode === SceneMode.MORPHING) viewer.scene.completeMorph()
-  removeMorphCompleteListener = viewer.scene.morphComplete.addEventListener(() => {
+  removeMorphCompleteListener = listenForMapMorphComplete(viewer.scene.morphComplete, () => {
     removeMorphCompleteListener = null
     renderRoutes()
     renderAircraft()

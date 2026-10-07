@@ -551,10 +551,26 @@ export function repairV3TwoDimensionalFrustum(viewer: Viewer): boolean {
   return true
 }
 
+const regionConstraintOwners = new WeakMap<Viewer, () => void>()
+
 export function configureRegionMapConstraints(
   viewer: Viewer,
   region: Pick<V3RegionCatalogItem, "boundary"> | null | undefined
 ): () => void {
+  // Resource retries can overlap. Release the previous region before capturing
+  // camera settings, so a late cleanup cannot restore an obsolete region.
+  regionConstraintOwners.get(viewer)?.()
+  const ownCleanup = (release: () => void) => {
+    let released = false
+    const cleanup = () => {
+      if (released) return
+      released = true
+      if (regionConstraintOwners.get(viewer) === cleanup) regionConstraintOwners.delete(viewer)
+      release()
+    }
+    regionConstraintOwners.set(viewer, cleanup)
+    return cleanup
+  }
   const removeFrustumGuard = viewer.scene.preUpdate.addEventListener(() => {
     repairV3TwoDimensionalFrustum(viewer)
     const controller = viewer.scene.screenSpaceCameraController
@@ -565,7 +581,7 @@ export function configureRegionMapConstraints(
   })
   const rectangle = regionRectangle(region)
   if (!rectangle) {
-    return () => removeFrustumGuard()
+    return ownCleanup(removeFrustumGuard)
   }
   const cameraController = viewer.scene.screenSpaceCameraController
   const previousMaximumZoomDistance = cameraController.maximumZoomDistance
@@ -647,7 +663,7 @@ export function configureRegionMapConstraints(
 
   const removeMoveEndListener = viewer.camera.moveEnd.addEventListener(keepInsideRegion)
   const removeChangedListener = viewer.camera.changed.addEventListener(handleCameraChanged)
-  return () => {
+  return ownCleanup(() => {
     removeFrustumGuard()
     removeMoveEndListener()
     removeChangedListener()
@@ -658,7 +674,7 @@ export function configureRegionMapConstraints(
     cameraController.minimumZoomDistance = previousMinimumZoomDistance
     viewer.camera.maximumZoomFactor = previousMaximumZoomFactor
     viewer.camera.percentageChanged = previousPercentageChanged
-  }
+  })
 }
 
 export function initialTwoDimensionalViewWidth(viewer: Pick<Viewer, "scene">): number {

@@ -10378,3 +10378,23 @@ select:focus-visible,
     display: none;
   }
 }
+
+/* Keep the late desktop header overrides from widening the mobile grid. */
+@media (max-width: 640px) {
+  .v3-project-header {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-rows: 48px 34px 38px;
+    gap: 6px;
+    padding: 0 6px;
+  }
+
+  .v3-project-header > .icon-command { grid-column: 1; grid-row: 1; }
+  .v3-project-header > .v3-project-title { grid-column: 2 / 7; grid-row: 1; }
+  .v3-project-header > .mode-status { grid-column: 7; grid-row: 1; }
+  .v3-project-header > .simulation-command { grid-column: 8; grid-row: 1; }
+  .v3-project-header > .questionnaire-command { grid-column: 1; grid-row: 2; }
+  .v3-project-header > .project-activity-command[aria-label="任务条件"] { grid-column: 2; grid-row: 2; }
+  .v3-project-header > .project-activity-command[aria-label="项目活动记录"] { grid-column: 3; grid-row: 2; }
+  .v3-project-header > .view-segment { grid-column: 4 / -1; grid-row: 2; }
+  .v3-project-header > .project-stage-guidance-mobile { grid-column: 1 / -1; grid-row: 3; }
+}
